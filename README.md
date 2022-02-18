@@ -1,4 +1,4 @@
-- 👋 Hi, I’m @mango7038
+- 👋 Hi, I’m Mangal
 - 👀 I’m interested in ... Learning new things
 - 🌱 I’m currently learning interior designing
 - 💞️ I’m looking to collaborate on ...

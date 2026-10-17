@@ -86,6 +86,16 @@ public final class NativeBridge {
             activity.getSharedPreferences("postflow_media",0).edit().remove(id).apply();
         }
     }
+    /** Read image bytes for the local poster editor. Limit bridge payload to avoid WebView memory exhaustion. */
+    @JavascriptInterface public String getMediaBase64(String id){
+        if(!MediaContentProvider.valid(id))return "";
+        File file=MediaContentProvider.mediaFile(activity,id);
+        if(!file.isFile()||file.length()>16L*1024*1024)return "";
+        try{
+            byte[] bytes=java.nio.file.Files.readAllBytes(file.toPath());
+            return Base64.encodeToString(bytes,Base64.NO_WRAP);
+        }catch(Exception ex){return "";}
+    }
     @JavascriptInterface public boolean hasMedia(String id){
         return MediaContentProvider.valid(id)&&MediaContentProvider.mediaFile(activity,id).isFile();
     }

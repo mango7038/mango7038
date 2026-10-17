@@ -75,6 +75,76 @@ public final class NativeBridge {
     private void sendWordPressResult(String json){
         activity.runOnUiThread(()->activity.getWebViewForBridge().evaluateJavascript("window.onWordPressSync("+org.json.JSONObject.quote(json)+")",null));
     }
+
+    /** Upload a local asset and one destination as an independent scheduled job. */
+    @JavascriptInterface public void queueWordPressPost(String mediaId,String clientId,String platform,String externalId,String placement,String caption,long scheduledAt){
+        new Thread(()->{
+            java.net.HttpURLConnection c=null;
+            try{
+                if(!MediaContentProvider.valid(mediaId)||!clientId.matches("[A-Za-z0-9_-]{12,100}")
+                    ||!java.util.Arrays.asList("facebook","instagram").contains(platform)
+                    ||!java.util.Arrays.asList("feed","reel","story").contains(placement)
+                    ||!externalId.matches("[0-9]{2,40}"))throw new IOException("Invalid job details");
+                File media=MediaContentProvider.mediaFile(activity,mediaId);
+                if(!media.isFile()||media.length()>100L*1024*1024)throw new IOException("Original media unavailable or too large");
+                String storedName=activity.getSharedPreferences("postflow_media",0).getString(mediaId,"media.jpg");
+                String ext=storedName.toLowerCase(java.util.Locale.ROOT);
+                String mime=ext.endsWith(".png")?"image/png":ext.endsWith(".mp4")?"video/mp4":ext.endsWith(".mov")?"video/quicktime":"image/jpeg";
+                String boundary="PFC"+java.util.UUID.randomUUID().toString().replace("-","");
+                java.net.URL url=new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs");
+                c=(java.net.HttpURLConnection)url.openConnection();
+                c.setRequestMethod("POST");c.setConnectTimeout(16000);c.setReadTimeout(35000);
+                c.setDoOutput(true);c.setChunkedStreamingMode(65536);
+                c.setRequestProperty("Authorization","Bearer "+wordpressKey());
+                c.setRequestProperty("Content-Type","multipart/form-data; boundary="+boundary);
+                try(java.io.OutputStream out=c.getOutputStream()){
+                    writeField(out,boundary,"platform",platform);writeField(out,boundary,"external_id",externalId);
+                    writeField(out,boundary,"placement",placement);writeField(out,boundary,"caption",caption==null?"":caption);
+                    writeField(out,boundary,"scheduled_at",Long.toString(scheduledAt));writeField(out,boundary,"client_job_id",clientId);
+                    out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\"media\"; filename=\"upload."+mime.substring(mime.indexOf('/')+1).replace("jpeg","jpg").replace("quicktime","mov")+"\"\r\nContent-Type: "+mime+"\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    try(java.io.InputStream in=new java.io.FileInputStream(media)){
+                        byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
+                    }
+                    out.write(("\r\n--"+boundary+"--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int code=c.getResponseCode();
+                String body="";
+                try(java.io.InputStream in=(code<400?c.getInputStream():c.getErrorStream())){
+                    if(in!=null){java.io.ByteArrayOutputStream b=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[2048];int n;while((n=in.read(buffer))!=-1&&b.size()<32000)b.write(buffer,0,n);body=b.toString("UTF-8");}
+                }
+                org.json.JSONObject result=new org.json.JSONObject();
+                result.put("client_id",clientId);result.put("http_status",code);result.put("ok",code==201||code==200);
+                if(code==201||code==200){org.json.JSONObject response=new org.json.JSONObject(body);result.put("job",response.optJSONObject("job"));}
+                else result.put("error","WordPress upload rejected (HTTP "+code+")");
+                sendPublishResult(result.toString());
+            }catch(Exception ex){
+                try{org.json.JSONObject result=new org.json.JSONObject();result.put("client_id",clientId);result.put("ok",false);result.put("error","Upload failed. Check connection and media; retry carefully.");sendPublishResult(result.toString());}catch(Exception ignored){}
+            }finally{if(c!=null)c.disconnect();}
+        }).start();
+    }
+    private static void writeField(java.io.OutputStream out,String boundary,String name,String value)throws IOException{
+        out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\""+name+"\"\r\n\r\n"+value+"\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    }
+    @JavascriptInterface public void getWordPressJobs(){
+        new Thread(()->{
+            java.net.HttpURLConnection c=null;
+            try{
+                c=(java.net.HttpURLConnection)new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs").openConnection();
+                c.setConnectTimeout(14000);c.setReadTimeout(14000);c.setRequestProperty("Authorization","Bearer "+wordpressKey());
+                if(c.getResponseCode()!=200)throw new IOException("Jobs request rejected");
+                try(java.io.InputStream in=c.getInputStream()){
+                    java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[4096];int n;
+                    while((n=in.read(b))!=-1){out.write(b,0,n);if(out.size()>400000)throw new IOException("Response limit exceeded");}
+                    sendPublishResult(out.toString("UTF-8"));
+                }
+            }catch(Exception ex){sendPublishResult("{\"error\":\"Could not fetch publishing jobs\"}");}
+            finally{if(c!=null)c.disconnect();}
+        }).start();
+    }
+    private void sendPublishResult(String json){
+        activity.runOnUiThread(()->activity.getWebViewForBridge().evaluateJavascript("window.onPostFlowPublish("+org.json.JSONObject.quote(json)+")",null));
+    }
+
     @JavascriptInterface public String getState(){
         java.io.File file=new java.io.File(activity.getFilesDir(),"state.json");
         try {

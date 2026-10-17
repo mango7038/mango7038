@@ -90,8 +90,9 @@ async function posterImageBlob(){
  if(editedPosterFile)return editedPosterFile;
  const f=document.getElementById('pMedia')?.files?.[0];if(f&&f.type.startsWith('image/'))return f;
  const p=state.posts.find(x=>x.id===editing);if(!p?.mediaId)return null;
- if(window.PostFlowNative?.getMediaBase64){try{const b64=PostFlowNative.getMediaBase64(p.mediaId);if(b64){const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:'image/jpeg'})}}catch(e){}}
- return await retrieveWebMedia(p.mediaId);
+ const sourceId=p.sourceMediaId||p.mediaId;
+ if(window.PostFlowNative?.getMediaBase64){try{const b64=PostFlowNative.getMediaBase64(sourceId);if(b64){const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:'image/jpeg'})}}catch(e){}}
+ return await retrieveWebMedia(sourceId);
 }
 function posterRememberForm(){let a={};['pTitle','pCaption','pDate','pTime','pKind','pStatus'].forEach(k=>{let e=document.getElementById(k);if(e)a[k]=e.value});a.checks={};document.querySelectorAll('#overlay input[type=checkbox]').forEach(e=>a.checks[e.id]=e.checked);return a}
 function posterRestoreForm(a){if(!a)return;Object.entries(a).forEach(([k,v])=>{let e=document.getElementById(k);if(e&&k!=='checks')e.value=v});Object.entries(a.checks||{}).forEach(([k,v])=>{let e=document.getElementById(k);if(e)e.checked=v})}
@@ -150,7 +151,7 @@ async function storePost(){
   if(status==='scheduled'&&!targets.length){toast('Select destinations or save as Draft');return}
   let old=state.posts.find(x=>x.id===editing)||{},id=editing||uid();
   let accountTargets={};state.accounts.forEach(a=>{let destinations=placementsForAccount(a).map(x=>x[0]).filter(k=>document.getElementById('account_'+a.id+'_'+k)?.checked);if(destinations.length)accountTargets[a.id]=destinations});
-  let post={...old,id,title,date,time,status,targets,accountTargets,caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers)post.posterLayers=posterPendingLayers;
+  let post={...old,id,title,date,time,status,targets,accountTargets,caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
   let file=editedPosterFile||document.getElementById('pMedia').files[0];
   if(file){
     if(file.size>100*1024*1024){toast('Single file limit: 100 MB');return}
@@ -163,7 +164,7 @@ async function storePost(){
   }
   if(editing)state.posts=state.posts.map(x=>x.id===editing?post:x);else state.posts.push(post);
   if(!save()){if(!editing)state.posts.pop();return}
-  if(old.mediaId && old.mediaId!==post.mediaId && !state.posts.some(x=>x.id!==post.id&&x.mediaId===old.mediaId))cleanupMedia(old.mediaId);
+  if(old.mediaId && old.mediaId!==post.mediaId && old.mediaId!==post.sourceMediaId && !state.posts.some(x=>x.id!==post.id&&(x.mediaId===old.mediaId||x.sourceMediaId===old.mediaId)))cleanupMedia(old.mediaId);
   editedPosterFile=null;posterPendingLayers=null;closeModal();route('queue');toast('Post and selected destinations saved.');
 }
 function setBulkMode(on){bulkMode=on;bulkSelected.clear();render()}

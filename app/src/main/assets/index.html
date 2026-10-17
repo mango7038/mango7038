@@ -71,7 +71,9 @@ function editPost(id){
   showModal({title:p?'Edit Scheduled Post':'Create New Post',body:`<div class="field"><label>Post Title</label><input id="pTitle" value="${esc(d.title)}" placeholder="Festival / promotion / birthday"></div>
   <div class="field"><label>Caption</label><textarea id="pCaption" placeholder="Write a caption...">${esc(d.caption)}</textarea></div>
   <div class="actions">${btn('Suggest Caption','suggestCaption()','mini secondary')}</div>
-  <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime"></div>
+  <div class="section"><h3>Poster Preview & Editor</h3></div>
+  <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
+  <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onchange="previewSelectedPostMedia()"></div>
   ${p&&p.mediaId?`<div class="note">Attached media is saved locally (${esc(p.mediaName||'Original file')}). Changing media is optional.</div>`:''}
   <div class="layout-actions"><div class="field"><label>Date</label><input id="pDate" type="date" value="${esc(d.date)}"></div><div class="field"><label>Time (IST)</label><input id="pTime" type="time" value="${esc(d.time)}"></div></div>
   <div class="field"><label>Content Type</label><select id="pKind"><option value="image" ${d.kind==='image'?'selected':''}>Photo / Poster</option><option value="reel" ${d.kind==='reel'?'selected':''}>Reel / Video</option></select></div>
@@ -81,7 +83,34 @@ function editPost(id){
   <div class="actions">${btn('Save Post','storePost()','')}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
   <div class="line"></div><div class="note">The app schedules local reminders now. Direct Instagram/Facebook/Google publishing will be enabled only after official API login is integrated. WhatsApp always requires manual send.</div>`});
 }
-function suggestCaption(){const title=document.getElementById('pTitle').value.trim()||'Special Day';document.getElementById('pCaption').value=makeCaption(title,pickCategory(title));}
+function suggestCaption(){const title=document.getElementById('pTitle').value.trim()||'Special Day';document.getElementById('pCaption').value=makeCaption(title,pickCategory(title));toast('Offline caption generated — review before posting')}
+let editedPosterFile=null;
+function previewSelectedPostMedia(){const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');editedPosterFile=null;if(!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{preview.src=reader.result;preview.style.display='block'};reader.readAsDataURL(file)}
+async function posterImageBlob(){
+ if(editedPosterFile)return editedPosterFile;
+ const f=document.getElementById('pMedia')?.files?.[0];if(f&&f.type.startsWith('image/'))return f;
+ const p=state.posts.find(x=>x.id===editing);if(!p?.mediaId)return null;
+ if(window.PostFlowNative?.getMediaBase64){try{const b64=PostFlowNative.getMediaBase64(p.mediaId);if(b64){const bin=atob(b64),arr=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)arr[i]=bin.charCodeAt(i);return new Blob([arr],{type:'image/jpeg'})}}catch(e){}}
+ return await retrieveWebMedia(p.mediaId);
+}
+async function openPosterEditor(){
+ const blob=await posterImageBlob();
+ const fallback=document.getElementById('postLargePreview')?.src||'';
+ if(!blob&&!fallback.startsWith('data:image/')){toast('Select an image to edit. Existing native media needs an accessible original.');return}
+ const url=blob?URL.createObjectURL(blob):fallback,img=new Image();
+ img.onload=()=>{if(blob)URL.revokeObjectURL(url);const max=2048,scale=Math.min(1,max/Math.max(img.width,img.height));let w=Math.round(img.width*scale),h=Math.round(img.height*scale);window.posterWork=document.createElement('canvas');posterWork.width=w;posterWork.height=h;posterWork.getContext('2d').drawImage(img,0,0,w,h);showPosterCanvas()};
+ img.onerror=()=>{if(blob)URL.revokeObjectURL(url);toast('Cannot open this image')};img.src=url;
+}
+function showPosterCanvas(){
+ const cv=window.posterWork;
+ showModal({title:'Poster Editor',body:`<div class="note">Changes are saved as a new JPEG copy. Original image stays safe.</div><canvas id="posterCanvas" style="display:block;width:100%;max-height:55vh;object-fit:contain;background:#171b30;border-radius:12px"></canvas><div class="field"><label>Add text / phone / website</label><input id="posterText" placeholder="Enter text to overlay"></div><div class="actions">${btn('Add Text','posterAddText()','mini')}${btn('Rotate 90°','posterRotate()','mini secondary')}${btn('Crop Square','posterCropSquare()','mini secondary')}</div><div class="actions">${btn('Save Edited Copy','posterSaveCopy()','full')}</div>`});
+ const out=document.getElementById('posterCanvas');out.width=cv.width;out.height=cv.height;out.getContext('2d').drawImage(cv,0,0);
+}
+function posterAddText(){const t=document.getElementById('posterText').value.trim();if(!t)return;const c=window.posterWork,ctx=c.getContext('2d');ctx.font='bold '+Math.max(20,Math.round(c.width/24))+'px sans-serif';ctx.textBaseline='bottom';ctx.lineWidth=Math.max(3,c.width/160);ctx.strokeStyle='#111';ctx.fillStyle='#fff';const x=c.width*.05,y=c.height*.94;ctx.strokeText(t,x,y,c.width*.9);ctx.fillText(t,x,y,c.width*.9);showPosterCanvas()}
+function posterRotate(){const c=window.posterWork,n=document.createElement('canvas');n.width=c.height;n.height=c.width;const ctx=n.getContext('2d');ctx.translate(n.width,0);ctx.rotate(Math.PI/2);ctx.drawImage(c,0,0);window.posterWork=n;showPosterCanvas()}
+function posterCropSquare(){const c=window.posterWork,n=document.createElement('canvas'),side=Math.min(c.width,c.height);n.width=n.height=side;n.getContext('2d').drawImage(c,(c.width-side)/2,(c.height-side)/2,side,side,0,0,side,side);window.posterWork=n;showPosterCanvas()}
+function posterSaveCopy(){window.posterWork.toBlob(async blob=>{if(!blob){toast('Image export failed');return}editedPosterFile=new File([blob],'postflow-edited-'+Date.now()+'.jpg',{type:'image/jpeg'});const data=window.posterWork.toDataURL('image/jpeg',.85);closeModal();editPost(editing);const preview=document.getElementById('postLargePreview');preview.src=data;preview.style.display='block';toast('Edited copy ready. Tap Save Post to attach it.')},'image/jpeg',.9)}
+
 async function storePost(){
   const title=document.getElementById('pTitle').value.trim(),date=document.getElementById('pDate').value,time=document.getElementById('pTime').value,status=document.getElementById('pStatus').value;
   const targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('tar_'+k).checked);
@@ -90,7 +119,7 @@ async function storePost(){
   let old=state.posts.find(x=>x.id===editing)||{},id=editing||uid();
   let accountTargets={};state.accounts.forEach(a=>{let destinations=placementsForAccount(a).map(x=>x[0]).filter(k=>document.getElementById('account_'+a.id+'_'+k)?.checked);if(destinations.length)accountTargets[a.id]=destinations});
   let post={...old,id,title,date,time,status,targets,accountTargets,caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};
-  let file=document.getElementById('pMedia').files[0];
+  let file=editedPosterFile||document.getElementById('pMedia').files[0];
   if(file){
     if(file.size>100*1024*1024){toast('Single file limit: 100 MB');return}
     const bytes=new Uint8Array(await file.arrayBuffer());
@@ -103,7 +132,7 @@ async function storePost(){
   if(editing)state.posts=state.posts.map(x=>x.id===editing?post:x);else state.posts.push(post);
   if(!save()){if(!editing)state.posts.pop();return}
   if(old.mediaId && old.mediaId!==post.mediaId && !state.posts.some(x=>x.id!==post.id&&x.mediaId===old.mediaId))cleanupMedia(old.mediaId);
-  closeModal();route('queue');toast('Post and selected destinations saved.');
+  editedPosterFile=null;closeModal();route('queue');toast('Post and selected destinations saved.');
 }
 function setBulkMode(on){bulkMode=on;bulkSelected.clear();render()}
 function toggleBulk(id){if(bulkSelected.has(id))bulkSelected.delete(id);else bulkSelected.add(id);render()}
@@ -147,6 +176,8 @@ function titleFromName(path){let pieces=path.split('/').filter(Boolean),folder=p
 function pickCategory(path){return /birthday|bday|janmadin/i.test(path)?'birthday':/festival|diwali|holi|eid|dussehra|navratri|raksha|ganesh|puja|pooja|christmas/i.test(path)?'festival':/offer|sale|discount|promo|campaign/i.test(path)?'promotion':'custom'}
 function makeCaption(name,cat){
  const l=state.settings.captionLanguage||'en';
+ if(/space[ _-]*planning/i.test(name))return l==='hi'?'स्मार्ट स्पेस प्लानिंग से हर जगह का बेहतर उपयोग करें! 🏡✨ #SpacePlanning #InteriorDesign':l==='mr'?'स्मार्ट स्पेस प्लॅनिंगने प्रत्येक जागेचा उत्तम वापर करा! 🏡✨ #SpacePlanning':'Thoughtful space planning makes every square foot count. 🏡✨ #SpacePlanning #InteriorDesign #SmartSpaces';
+ if(/diwali|दिवाली|दीपावली/i.test(name))return l==='hi'?'दीपावली की हार्दिक शुभकामनाएँ! 🪔✨ आपके घर में सुख, समृद्धि और रोशनी बनी रहे। #Diwali':l==='mr'?'दिवाळीच्या हार्दिक शुभेच्छा! 🪔✨ #Diwali':'Wishing you a bright and joyful Diwali! 🪔✨ #Diwali #FestiveWishes';
  if(l==='hi')return cat==='festival'?`${name} की हार्दिक शुभकामनाएँ! ✨ #त्योहार #शुभकामनाएं`:cat==='birthday'?`जन्मदिन की हार्दिक शुभकामनाएँ! 🎉 #जन्मदिन` :cat==='promotion'?`${name} — आज ही जानकारी लें! ✨ #ऑफर #प्रमोशन`:`${name} ✨ #अपडेट`;
  if(l==='mr')return cat==='festival'?`${name} च्या हार्दिक शुभेच्छा! ✨ #सण #शुभेच्छा`:cat==='birthday'?`वाढदिवसाच्या हार्दिक शुभेच्छा! 🎉` :cat==='promotion'?`${name} — आजच अधिक जाणून घ्या! ✨ #ऑफर`:`${name} ✨ #अपडेट`;
  return cat==='festival'?`Warm wishes on ${name}! ✨ #Festival #Greetings`:cat==='birthday'?`Happy Birthday! Wishing you a wonderful year ahead. 🎉`:cat==='promotion'?`${name} — discover more today! ✨ #Offers #Promotion`:`${name} ✨ #Update`;
@@ -247,6 +278,8 @@ function saveSettings(){let t=document.getElementById('prefTime').value;if(!t)re
  state.settings.reminderDays=[7,1,0].filter(n=>document.getElementById('rem_'+n).checked);
  state.settings.defaultTargets=DEST.map(d=>d[0]).filter(k=>document.getElementById('def_'+k).checked);
  save();toast('All preferences saved. Android reminders updated.')}
+function connectSocialAccount(){showModal({title:'Connect Social Account',body:`<div class="note">Official Instagram, Facebook Pages and Google Business Profile authorization needs a configured OAuth backend and approved platform permissions. This version does not pretend a label is a live connection.</div><div class="field"><label>Platform</label><select id="connectPlatform"><option>Instagram</option><option>Facebook Pages</option><option>Google Business Profile</option></select></div>${btn('Check Connection Setup','checkSocialSetup()','full')}${btn('Add Offline Label Instead','addAccount()','secondary full')}`})}
+function checkSocialSetup(){const c=state.apiConfig||{};if(!c.backend||!c.backend.startsWith('https://')){toast('Set up HTTPS OAuth backend in API Configuration first');return}toast('Backend configured, but secure OAuth handshake is not implemented yet. No account connected.')}
 function addAccount(){showModal({title:'Add Account Label',body:`<p class="sub">Planning label only. Social authorization is not included.</p><div class="field"><label>Platform</label><select id="aPlatform"><option>Instagram</option><option>Facebook Pages</option><option>Google Business Profile</option></select></div><div class="field"><label>Page / Profile Name</label><input id="aName" placeholder="My Business Page"></div>${btn('Add Label','saveAccount()','full')}`})}function saveAccount(){let name=document.getElementById('aName').value.trim();if(!name){toast('Name required');return}state.accounts.push({id:uid(),name,platform:document.getElementById('aPlatform').value});save();closeModal();render()}function deleteAccount(id){state.accounts=state.accounts.filter(a=>a.id!==id);save();render()}
 function exportBackup(){if(window.PostFlowNative?.exportBackup)PostFlowNative.exportBackup();else exportJsonBackup()}
 function importNativeBackup(){if(window.PostFlowNative?.importBackup)PostFlowNative.importBackup();else importBackup()}

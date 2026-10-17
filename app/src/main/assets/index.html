@@ -31,7 +31,7 @@ else if(page==='queue'){let posts=[...state.posts].sort((a,b)=>(a.date+a.time).l
 else if(page==='calendar')calendarRender(el);
 else if(page==='library'){el.innerHTML=`<h2>Smart ZIP Library</h2><p class="sub">Upload dated festivals, promotions, posters or Reels. Valid items are automatically scheduled at ${esc(state.settings.time)} IST.</p><div class="banner"><div><b>Auto Schedule from ZIP</b><small>Date detection · Caption suggestions<br>Duplicate checks · Manual edits</small></div>${btn('Upload ZIP','openZip()','')}</div><div class="section"><h3>ZIP Imports</h3></div><div class="card">${state.imports.length?state.imports.map(i=>`<div class="item"><div class="thumb">▣</div><div class="body"><b>${esc(i.name)}</b><small>${esc(i.imported)} • ${i.added} added • ${i.duplicates} duplicates</small></div></div>`).join(''):'<div class="empty">No ZIP files imported.</div>'}</div><div class="section"><h3>Media & Posts</h3><a onclick="route('queue')">Queue →</a></div><div class="card">${state.posts.length?state.posts.slice().reverse().map(postItem).join(''):'<div class="empty">Upload your content to get started.</div>'}</div>`}
 else if(page==='events'){let evs=nextEvents();el.innerHTML=`<h2>Festivals & Events</h2><p class="sub">2026 Maharashtra festival dates included; add your own occasions, client birthdays and reminders. Festival dates for other years should be verified.</p><div class="actions">${btn('＋ Add Event','editEvent()','')}${btn('Add Fixed Indian Days','seedIndianDays()')}${btn('Calendar',"route('calendar')")}</div><div class="section"><h3>Upcoming Events</h3></div><div class="card">${evs.length?evs.map(eventItem).join(''):'<div class="empty">Add your first festival or birthday.</div>'}</div><div class="section"><h3>Quick note</h3></div><div class="note">Yearly birthdays repeat automatically. Indian lunar festivals may change date every year and should be verified annually. Android notifications and home-screen Festival Widget are included in the native app project. Add the widget from your launcher after installation.</div>`}
-else if(page==='accounts'){const synced=state.wpAccounts||[];el.innerHTML=`<h2>Social Accounts</h2><p class="sub">Verified accounts from your WordPress connection.</p><div class="card"><b>WordPress Backend</b><p class="sub">https://graphicanest.in</p><div class="note">Pair once with the key generated in WordPress → Settings → PostFlow Connect. Your Meta tokens stay on WordPress. Account sync is read-only; automatic posting is not enabled.</div><div class="actions">${btn('Pair WordPress','openWordPressPair()')}${btn('Sync Accounts','syncWordPressAccounts()')}${btn('Unpair','unpairWordPress()','secondary')}</div><small>${esc(state.wpSyncStatus||'Not synced yet')}</small></div><div class="section"><h3>Verified Profiles</h3></div><div class="card">${synced.length?synced.map(a=>`<div class="item"><div class="thumb">◎</div><div class="body"><b>${esc(a.name)}</b><small>${esc(a.platform)} • Verified on WordPress</small></div><span class="tag green">Synced</span></div>`).join(''):'<div class="empty">No verified accounts synced yet.</div>'}</div><div class="section"><h3>Offline Labels</h3>${btn('Add Offline Label','addAccount()','secondary')}</div><div class="card">${state.accounts.length?state.accounts.map(a=>`<div class="item"><div class="body"><b>${esc(a.name)}</b><small>${esc(a.platform)} • Planning only</small></div><button class="rowbtn" onclick="deleteAccount('${a.id}')">Remove</button></div>`).join(''):'<div class="empty">No offline labels.</div>'}</div>`}
+else if(page==='accounts'){const synced=state.wpAccounts||[];el.innerHTML=`<h2>Social Accounts</h2><p class="sub">Verified accounts from your WordPress connection.</p><div class="card"><b>WordPress Backend</b><p class="sub">https://graphicanest.in</p><div class="note">Pair once with the key generated in WordPress → Settings → PostFlow Connect. Your Meta tokens stay on WordPress. Account sync is read-only; automatic posting is not enabled.</div><div class="actions">${btn('Pair WordPress','openWordPressPair()')}${btn('Sync Accounts','syncWordPressAccounts()')}${btn('Unpair','unpairWordPress()','secondary')}${btn('Publishing Jobs','refreshPublishJobs()','secondary')}</div><small>${esc(state.wpSyncStatus||'Not synced yet')}</small></div><div class="section"><h3>Verified Profiles</h3></div><div class="card">${synced.length?synced.map(a=>`<div class="item"><div class="thumb">◎</div><div class="body"><b>${esc(a.name)}</b><small>${esc(a.platform)} • Verified on WordPress</small></div><span class="tag green">Synced</span></div>`).join(''):'<div class="empty">No verified accounts synced yet.</div>'}</div><div class="section"><h3>Offline Labels</h3>${btn('Add Offline Label','addAccount()','secondary')}</div><div class="card">${state.accounts.length?state.accounts.map(a=>`<div class="item"><div class="body"><b>${esc(a.name)}</b><small>${esc(a.platform)} • Planning only</small></div><button class="rowbtn" onclick="deleteAccount('${a.id}')">Remove</button></div>`).join(''):'<div class="empty">No offline labels.</div>'}</div>`}
 else if(page==='settings'){el.innerHTML=`<h2>Settings</h2><p class="sub">Personal automation and Android notification preferences.</p>
 <div class="card"><div class="field"><label>Default posting time • Asia/Kolkata (IST)</label><input id="prefTime" type="time" value="${esc(state.settings.time)}"></div>
 <div class="field"><label>Caption suggestion language</label><select id="prefLanguage"><option value="en" ${state.settings.captionLanguage==='en'?'selected':''}>English</option><option value="hi" ${state.settings.captionLanguage==='hi'?'selected':''}>Hindi</option><option value="mr" ${state.settings.captionLanguage==='mr'?'selected':''}>Marathi</option></select></div>
@@ -80,7 +80,7 @@ function editPost(id){
   <div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
   ${acct}<div class="field"><label>Publishing State</label><select id="pStatus"><option value="scheduled" ${d.status==='scheduled'?'selected':''}>Scheduled / Reminder armed</option><option value="draft" ${d.status==='draft'?'selected':''}>Draft</option><option value="paused" ${d.status==='paused'?'selected':''}>Paused — no reminders</option><option value="manually_posted" ${d.status==='manually_posted'?'selected':''}>Marked shared manually</option></select></div>
-  <div class="actions">${btn('Save Post','storePost()','')}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
+  <div class="actions">${btn('Save Post','storePost()','')}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
   <div class="line"></div><div class="note">The app schedules local reminders now. Direct Instagram/Facebook/Google publishing will be enabled only after official API login is integrated. WhatsApp always requires manual send.</div>`});
 }
 function suggestCaption(){const title=document.getElementById('pTitle').value.trim()||'Special Day';document.getElementById('pCaption').value=makeCaption(title,pickCategory(title));toast('Offline caption generated — review before posting')}
@@ -312,6 +312,49 @@ function saveSettings(){let t=document.getElementById('prefTime').value;if(!t)re
  state.settings.reminderDays=[7,1,0].filter(n=>document.getElementById('rem_'+n).checked);
  state.settings.defaultTargets=DEST.map(d=>d[0]).filter(k=>document.getElementById('def_'+k).checked);
  save();toast('All preferences saved. Android reminders updated.')}
+
+function openPublishPost(id){
+ const p=state.posts.find(x=>x.id===id),accounts=(state.wpAccounts||[]).filter(x=>x.platform==='facebook'||x.platform==='instagram');
+ if(!p?.mediaId)return toast('Attach and save media first');
+ if(!accounts.length)return toast('Sync Facebook and Instagram first');
+ if(!window.PostFlowNative?.queueWordPressPost)return toast('New Android build required');
+ const fields=accounts.map((a,i)=>'<div class="card"><b>'+esc(a.name)+'</b> · '+esc(a.platform)+'<div class="field"><label>Placement</label><select id="pub_'+i+'"><option value="">Skip this account</option><option value="feed">Feed</option>'+(p.kind==='reel'?'<option value="reel">Reel</option>':'')+'<option value="story">Story</option></select></div></div>').join('');
+ showModal({title:'Automatic Publishing',body:'<div class="note">Upload to WordPress for '+esc(p.date)+' '+esc(p.time)+' IST. Publishing requires v1.5 plugin, renewed Meta permissions and working WP cron. This sends real posts, not reminders.</div>'+fields+btn('Upload and Schedule',"submitPublishPost('"+p.id+"')",'full')});
+}
+function submitPublishPost(id){
+ const p=state.posts.find(x=>x.id===id);if(!p)return;
+ const at=Math.floor(new Date(p.date+'T'+p.time+':00+05:30').getTime()/1000);
+ if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+60)return toast('Date must be at least a minute in the future');
+ const accounts=(state.wpAccounts||[]).filter(x=>x.platform==='facebook'||x.platform==='instagram');
+ const selected=accounts.flatMap((a,i)=>{const placement=document.getElementById('pub_'+i)?.value;return placement?[{a,placement}]:[]});
+ if(!selected.length)return toast('Select at least one destination');
+ if(!confirm('Upload '+selected.length+' jobs for real automatic publishing?'))return;
+ state.wpPendingJobs=state.wpPendingJobs||{};
+ selected.forEach(({a,placement})=>{
+  const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');
+  state.wpPendingJobs[key]={title:p.title,account:a.name,placement,status:'uploading'};
+  PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
+ });
+ save();closeModal();route('accounts');toast('Uploading jobs; check Publishing Jobs for results');
+}
+function refreshPublishJobs(){
+ if(!window.PostFlowNative?.getWordPressJobs)return toast('New Android build required');
+ PostFlowNative.getWordPressJobs();toast('Fetching publishing status');
+}
+window.onPostFlowPublish=function(raw){
+ try{
+  const r=JSON.parse(raw);
+  if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?'scheduled':'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';}save();toast(r.ok?'Job accepted by WordPress':r.error||'Upload failed');if(page==='accounts')render();}
+  else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;save();showPublishJobs();}
+  else if(r.error)toast(r.error);
+ }catch(e){toast('Unexpected publishing response');}
+};
+function showPublishJobs(){
+ const server=(state.wpServerJobs||[]).map(j=>'<div class="item"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><small>'+esc(j.status)+' · '+new Date(j.scheduled_at*1000).toLocaleString('en-IN')+'</small><small>'+esc(j.error||'')+'</small></div></div>').join('');
+ const local=Object.values(state.wpPendingJobs||{}).slice(-15).reverse().map(j=>'<div class="item"><div class="body"><b>'+esc(j.title)+'</b><small>'+esc(j.account)+' · '+esc(j.placement)+' · '+esc(j.status)+'</small><small>'+esc(j.error||'')+'</small></div></div>').join('');
+ showModal({title:'Publishing Jobs',body:'<p class="sub">Server publishing status. Do not duplicate submissions after ambiguous upload errors.</p>'+(server||'<div class="empty">No server jobs yet</div>')+'<h3>Local Uploads</h3>'+(local||'<div class="empty">No uploads</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});
+}
+
 function openWordPressPair(){if(!window.PostFlowNative?.pairWordPress){toast('Android native app update required');return}showModal({title:'Pair WordPress',body:`<div class="note">Website: https://graphicanest.in. Generate your private pairing key in WordPress Settings → PostFlow Connect. Never share it in chat.</div><div class="field"><label>Private Pairing Key</label><input id="wpPairKey" type="password" autocomplete="off" placeholder="Paste pairing key"></div>${btn('Save Key & Sync','saveWordPressPair()','full')}`})}
 function saveWordPressPair(){const field=document.getElementById('wpPairKey');const key=field?.value.trim()||'';if(!/^[A-Za-z0-9_-]{32,128}$/.test(key)){toast('Invalid pairing key format');return}field.value='';closeModal();state.wpSyncStatus='Connecting…';render();window.PostFlowNative.pairWordPress(key)}
 function syncWordPressAccounts(){if(!window.PostFlowNative?.syncWordPressAccounts){toast('Android native app update required');return}state.wpSyncStatus='Syncing…';render();window.PostFlowNative.syncWordPressAccounts()}

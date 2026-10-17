@@ -35,36 +35,18 @@ jobs:
           fi
           echo "Using $SDKMANAGER"
           "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-      - name: Require original installed-app signing key
-        env:
-          KEYSTORE_B64: ${{ secrets.POSTFLOW_LEGACY_KEYSTORE_BASE64 }}
-          KEYSTORE_PASS: ${{ secrets.POSTFLOW_LEGACY_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.POSTFLOW_LEGACY_KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.POSTFLOW_LEGACY_KEY_PASSWORD }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [[ -z "$KEYSTORE_B64" || -z "$KEYSTORE_PASS" || -z "$KEY_ALIAS" || -z "$KEY_PASS" ]]; then
-            echo "::error::Original installed APK signing key not configured. Refusing to produce another conflicting APK. Configure POSTFLOW_LEGACY_KEYSTORE_BASE64 and password/alias secrets."
-            exit 1
-          fi
-          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/postflow-legacy.jks"
-          echo "POSTFLOW_KEYSTORE_PATH=$RUNNER_TEMP/postflow-legacy.jks" >> "$GITHUB_ENV"
-          echo "POSTFLOW_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
-          echo "POSTFLOW_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
-          echo "POSTFLOW_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
-      - name: Compile legacy-key-signed Android update
-        run: gradle --no-daemon --stacktrace :app:assembleRelease
+      - name: Build new package debug APK
+        run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Validate APK signature
         run: |
           set -euo pipefail
-          APK=app/build/outputs/apk/release/app-release.apk
+          APK=app/build/outputs/apk/debug/app-debug.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           ls -lh "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-v5.3-debug-apk
-          path: app/build/outputs/apk/release/app-release.apk
+          name: PostFlow-Studio-New-v5.3-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

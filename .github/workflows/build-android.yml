@@ -1,4 +1,4 @@
-name: Build PostFlow Android Debug APK
+name: Build PostFlow v5 Android APK
 on:
   workflow_dispatch:
   push:
@@ -35,6 +35,11 @@ jobs:
           fi
           echo "Using $SDKMANAGER"
           "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Signing compatibility notice
+        run: |
+          echo 'WARNING: GitHub hosted runners use ephemeral debug keystores.'
+          echo 'An APK signed with a different certificate cannot update an installed app.'
+          echo 'Do not uninstall the existing app before exporting a verified full backup.'
       - name: Compile Android app
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Validate APK
@@ -45,6 +50,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-v3-debug-apk
+          name: PostFlow-Studio-v5-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

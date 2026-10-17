@@ -31,6 +31,7 @@ public final class MainActivity extends Activity {
     private static final int FILE_PICKER = 2002;
     private static final int BACKUP_PICKER = 2003;
     private WebView web;
+    WebView getWebViewForBridge(){return web;}
     private ValueCallback<Uri[]> fileCallback;
 
     @Override public void onCreate(Bundle savedInstanceState) {

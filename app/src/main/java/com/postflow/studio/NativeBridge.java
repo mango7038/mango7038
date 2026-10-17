@@ -26,7 +26,7 @@ public final class NativeBridge {
 
     /** Pairing credential is stored in Android Keystore-backed encrypted preferences when available. */
     @JavascriptInterface public void pairWordPress(String key){
-        if(key==null || !key.matches("[A-Za-z0-9_-]{32,128}")){sendWordPressResult("{\\"error\\":\\"Invalid pairing key format\\"}");return;}
+        if(key==null || !key.matches("[A-Za-z0-9_-]{32,128}")){sendWordPressResult("{\"error\":\"Invalid pairing key format\"}");return;}
         try{
             javax.crypto.KeyGenerator generator=javax.crypto.KeyGenerator.getInstance("AES","AndroidKeyStore");
             android.security.keystore.KeyGenParameterSpec spec=new android.security.keystore.KeyGenParameterSpec.Builder("postflow_wp_pair",android.security.keystore.KeyProperties.PURPOSE_ENCRYPT|android.security.keystore.KeyProperties.PURPOSE_DECRYPT).setBlockModes("GCM").setEncryptionPaddings("NoPadding").build();
@@ -37,7 +37,7 @@ public final class NativeBridge {
             byte[] enc=cipher.doFinal(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).edit().putString("key",Base64.encodeToString(enc,Base64.NO_WRAP)).putString("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)).apply();
             syncWordPressAccounts();
-        }catch(Exception e){sendWordPressResult("{\\"error\\":\\"Could not securely save pairing key\\"}");}
+        }catch(Exception e){sendWordPressResult("{\"error\":\"Could not securely save pairing key\"}");}
     }
     private String wordpressKey() throws Exception{
         android.content.SharedPreferences prefs=activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE);
@@ -48,7 +48,7 @@ public final class NativeBridge {
         return new String(cipher.doFinal(Base64.decode(prefs.getString("key",""),Base64.NO_WRAP)),java.nio.charset.StandardCharsets.UTF_8);
     }
     @JavascriptInterface public boolean isWordPressPaired(){return activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).contains("key");}
-    @JavascriptInterface public void unpairWordPress(){activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).edit().clear().apply();sendWordPressResult("{\\"unpaired\\":true}");}
+    @JavascriptInterface public void unpairWordPress(){activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).edit().clear().apply();sendWordPressResult("{\"unpaired\":true}");}
     @JavascriptInterface public void syncWordPressAccounts(){
         new Thread(()->{
             java.net.HttpURLConnection c=null;
@@ -60,7 +60,7 @@ public final class NativeBridge {
                 c.setRequestProperty("Authorization","Bearer "+key);
                 c.setRequestProperty("Accept","application/json");
                 int status=c.getResponseCode();
-                if(status!=200){sendWordPressResult("{\\"error\\":\\"WordPress rejected sync (HTTP "+status+")\\"}");return;}
+                if(status!=200){sendWordPressResult("{\"error\":\"WordPress rejected sync (HTTP "+status+")\"}");return;}
                 try(java.io.InputStream in=c.getInputStream()){
                     java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
                     while((n=in.read(buffer))!=-1){bytes.write(buffer,0,n);if(bytes.size()>150000)throw new IOException("Response too large");}
@@ -68,7 +68,7 @@ public final class NativeBridge {
                     if(data.optJSONArray("accounts")==null)throw new IOException("Invalid accounts response");
                     sendWordPressResult(data.toString());
                 }
-            }catch(Exception e){sendWordPressResult("{\\"error\\":\\"Sync failed. Check internet, pairing key and website API.\\"}");}
+            }catch(Exception e){sendWordPressResult("{\"error\":\"Sync failed. Check internet, pairing key and website API.\"}");}
             finally{if(c!=null)c.disconnect();}
         }).start();
     }

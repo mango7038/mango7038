@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.PostFlow" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#927AFF</item>
+        <item name="android:statusBarColor">#0B1020</item>
+        <item name="android:navigationBarColor">#12182A</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+    </style>
+</resources>

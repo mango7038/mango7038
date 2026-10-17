@@ -1,0 +1,28 @@
+POSTFLOW STUDIO — ANDROID BUILD (V3)
+
+Ye Android Studio SOURCE PROJECT hai. Is container mein Android SDK nahin hai,
+isliye maine nayi APK build/install verify nahi ki hai. Purani 57 KB APK use mat karna.
+
+APK banane ka option 1 (PC):
+1. Android Studio install karo.
+2. Is folder ko Open Project karo (settings.gradle wala folder).
+3. SDK Platform 35 / Build Tools 35 install karo, Gradle sync hone do.
+4. Build > Build Bundle(s) / APK(s) > Build APK(s).
+5. app/build/outputs/apk/debug/app-debug.apk mobile mein copy/install karo.
+
+Option 2 (GitHub Actions cloud build):
+1. ZIP extract karke project ko GitHub repository mein upload karo.
+2. Repository > Actions > Build installable Android debug APK > Run workflow.
+3. Workflow success hone par PostFlow-Studio-Android-Debug-APK artifact download karo.
+4. Artifact ZIP ke andar app-debug.apk rahega; woh mobile mein install karo.
+
+Android test:
+- App first start par 4–8 digit PIN banega.
+- Android notification permission allow karo.
+- Home screen long-press > Widgets > PostFlow Studio calendar add karo.
+- sample/sample_dated_festivals.zip import karke calendar test karo.
+- Story / WhatsApp share ke selections individual post ke liye edit karo.
+
+Social media par direct auto publishing abhi possible nahi: OAuth/API+cloud integration baad mein.
+Bina APIs ke app schedule, original media store, reminder notify aur manual sharing karta hai.
+Native Android notification/widget implementation source mein hai, lekin real phone test pending hai.

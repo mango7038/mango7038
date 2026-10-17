@@ -8,11 +8,22 @@ android {
         applicationId 'com.postflow.studio'
         minSdk 26
         targetSdk 35
-        versionCode 52
-        versionName '5.2.0'
+        versionCode 53
+        versionName '5.3.0'
+    }
+    signingConfigs {
+        legacyUpdate {
+            storeFile file(System.getenv('POSTFLOW_KEYSTORE_PATH') ?: 'missing-legacy-key.jks')
+            storePassword System.getenv('POSTFLOW_KEYSTORE_PASSWORD') ?: ''
+            keyAlias System.getenv('POSTFLOW_KEY_ALIAS') ?: ''
+            keyPassword System.getenv('POSTFLOW_KEY_PASSWORD') ?: ''
+        }
     }
     buildTypes {
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.legacyUpdate
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

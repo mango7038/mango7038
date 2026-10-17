@@ -23,6 +23,58 @@ public final class NativeBridge {
     private final Map<String,FileOutputStream> streams=new HashMap<>();
     NativeBridge(MainActivity activity){this.activity=activity;}
 
+
+    /** Pairing credential is stored in Android Keystore-backed encrypted preferences when available. */
+    @JavascriptInterface public void pairWordPress(String key){
+        if(key==null || !key.matches("[A-Za-z0-9_-]{32,128}")){sendWordPressResult("{\\"error\\":\\"Invalid pairing key format\\"}");return;}
+        try{
+            javax.crypto.KeyGenerator generator=javax.crypto.KeyGenerator.getInstance("AES","AndroidKeyStore");
+            android.security.keystore.KeyGenParameterSpec spec=new android.security.keystore.KeyGenParameterSpec.Builder("postflow_wp_pair",android.security.keystore.KeyProperties.PURPOSE_ENCRYPT|android.security.keystore.KeyProperties.PURPOSE_DECRYPT).setBlockModes("GCM").setEncryptionPaddings("NoPadding").build();
+            java.security.KeyStore store=java.security.KeyStore.getInstance("AndroidKeyStore");store.load(null);
+            if(!store.containsAlias("postflow_wp_pair")){generator.init(spec);generator.generateKey();}
+            javax.crypto.SecretKey secret=((java.security.KeyStore.SecretKeyEntry)store.getEntry("postflow_wp_pair",null)).getSecretKey();
+            javax.crypto.Cipher cipher=javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");cipher.init(javax.crypto.Cipher.ENCRYPT_MODE,secret);
+            byte[] enc=cipher.doFinal(key.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).edit().putString("key",Base64.encodeToString(enc,Base64.NO_WRAP)).putString("iv",Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)).apply();
+            syncWordPressAccounts();
+        }catch(Exception e){sendWordPressResult("{\\"error\\":\\"Could not securely save pairing key\\"}");}
+    }
+    private String wordpressKey() throws Exception{
+        android.content.SharedPreferences prefs=activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE);
+        java.security.KeyStore store=java.security.KeyStore.getInstance("AndroidKeyStore");store.load(null);
+        javax.crypto.SecretKey secret=((java.security.KeyStore.SecretKeyEntry)store.getEntry("postflow_wp_pair",null)).getSecretKey();
+        javax.crypto.Cipher cipher=javax.crypto.Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(javax.crypto.Cipher.DECRYPT_MODE,secret,new javax.crypto.spec.GCMParameterSpec(128,Base64.decode(prefs.getString("iv",""),Base64.NO_WRAP)));
+        return new String(cipher.doFinal(Base64.decode(prefs.getString("key",""),Base64.NO_WRAP)),java.nio.charset.StandardCharsets.UTF_8);
+    }
+    @JavascriptInterface public boolean isWordPressPaired(){return activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).contains("key");}
+    @JavascriptInterface public void unpairWordPress(){activity.getSharedPreferences("postflow_wp",Context.MODE_PRIVATE).edit().clear().apply();sendWordPressResult("{\\"unpaired\\":true}");}
+    @JavascriptInterface public void syncWordPressAccounts(){
+        new Thread(()->{
+            java.net.HttpURLConnection c=null;
+            try{
+                String key=wordpressKey();
+                java.net.URL url=new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/accounts");
+                c=(java.net.HttpURLConnection)url.openConnection();
+                c.setRequestMethod("GET");c.setConnectTimeout(12000);c.setReadTimeout(12000);
+                c.setRequestProperty("Authorization","Bearer "+key);
+                c.setRequestProperty("Accept","application/json");
+                int status=c.getResponseCode();
+                if(status!=200){sendWordPressResult("{\\"error\\":\\"WordPress rejected sync (HTTP "+status+")\\"}");return;}
+                try(java.io.InputStream in=c.getInputStream()){
+                    java.io.ByteArrayOutputStream bytes=new java.io.ByteArrayOutputStream();byte[] buffer=new byte[4096];int n;
+                    while((n=in.read(buffer))!=-1){bytes.write(buffer,0,n);if(bytes.size()>150000)throw new IOException("Response too large");}
+                    org.json.JSONObject data=new org.json.JSONObject(bytes.toString("UTF-8"));
+                    if(data.optJSONArray("accounts")==null)throw new IOException("Invalid accounts response");
+                    sendWordPressResult(data.toString());
+                }
+            }catch(Exception e){sendWordPressResult("{\\"error\\":\\"Sync failed. Check internet, pairing key and website API.\\"}");}
+            finally{if(c!=null)c.disconnect();}
+        }).start();
+    }
+    private void sendWordPressResult(String json){
+        activity.runOnUiThread(()->activity.getWebViewForBridge().evaluateJavascript("window.onWordPressSync("+org.json.JSONObject.quote(json)+")",null));
+    }
     @JavascriptInterface public String getState(){
         java.io.File file=new java.io.File(activity.getFilesDir(),"state.json");
         try {

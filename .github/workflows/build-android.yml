@@ -1,4 +1,4 @@
-name: Build PostFlow v5.2 Android APK
+name: Build PostFlow v5.3 Android APK
 on:
   workflow_dispatch:
   push:
@@ -35,21 +35,36 @@ jobs:
           fi
           echo "Using $SDKMANAGER"
           "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-      - name: Signing compatibility notice
+      - name: Require original installed-app signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.POSTFLOW_LEGACY_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.POSTFLOW_LEGACY_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.POSTFLOW_LEGACY_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.POSTFLOW_LEGACY_KEY_PASSWORD }}
+        shell: bash
         run: |
-          echo 'WARNING: GitHub hosted runners use ephemeral debug keystores.'
-          echo 'An APK signed with a different certificate cannot update an installed app.'
-          echo 'Do not uninstall the existing app before exporting a verified full backup.'
-      - name: Compile Android app
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
-      - name: Validate APK
+          set -euo pipefail
+          if [[ -z "$KEYSTORE_B64" || -z "$KEYSTORE_PASS" || -z "$KEY_ALIAS" || -z "$KEY_PASS" ]]; then
+            echo "::error::Original installed APK signing key not configured. Refusing to produce another conflicting APK. Configure POSTFLOW_LEGACY_KEYSTORE_BASE64 and password/alias secrets."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/postflow-legacy.jks"
+          echo "POSTFLOW_KEYSTORE_PATH=$RUNNER_TEMP/postflow-legacy.jks" >> "$GITHUB_ENV"
+          echo "POSTFLOW_KEYSTORE_PASSWORD=$KEYSTORE_PASS" >> "$GITHUB_ENV"
+          echo "POSTFLOW_KEY_ALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "POSTFLOW_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+      - name: Compile legacy-key-signed Android update
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
+      - name: Validate APK signature
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
+          ls -lh "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-v5.2-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: PostFlow-Studio-v5.3-debug-apk
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

@@ -471,6 +471,7 @@ function refreshPublishJobs(){
 window.onPostFlowPublish=function(raw){
  try{
   const r=JSON.parse(raw);
+  if(r.mutation){if(r.ok&&r.job){state.wpServerJobs=(state.wpServerJobs||[]).map(j=>Number(j.id)===Number(r.job_id)?r.job:j);for(const local of Object.values(state.wpPendingJobs||{})){if(Number(local.serverId)===Number(r.job_id)){local.status=r.job.status;local.scheduled_at=r.job.scheduled_at;local.error=r.job.error||'';}}save();toast(r.mutation==='DELETE'?'Scheduled job cancelled on WordPress':'WordPress job updated');showJobDetail(Number(r.job_id));}else{toast(r.error||'Update was rejected');showJobDetail(Number(r.job_id));}return;}
   if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';}save();toast(r.ok?'Job accepted by WordPress':r.error||'Upload failed');if(page==='accounts')render();}
   else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}save();showPublishJobs();}
   else if(r.error)toast(r.error);
@@ -501,12 +502,38 @@ function showPublishJobs(){
  const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Issue: '+esc(String(j.error).slice(0,110))+'</small>':'')+'</div><span class="rowbtn">Details ›</span></div>').join('');
  showModal({title:'Publishing Center',body:'<p class="sub">Live server results. Publishing and local reminders are separate.</p>'+(jobs||'<div class="empty">No server jobs yet</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});
 }
+function dateTimeLocalIST(unix){if(!unix)return '';const d=new Date((unix+19800)*1000);return d.toISOString().slice(0,16)}
+function openJobEdit(id){
+ const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j||j.status!=='scheduled')return toast('Only pending scheduled jobs can be edited');
+ const accounts=(state.wpAccounts||[]).filter(a=>a.platform===j.platform);
+ const options=accounts.map(a=>'<option value="'+esc(a.external_id)+'" '+(String(a.external_id)===String(j.external_id)?'selected':'')+'>'+esc(a.name)+'</option>').join('');
+ const placements=j.media_count>1?['carousel']:(j.platform==='instagram'?['feed','story','reel']:['feed','story','reel']);
+ const picks=placements.map(p=>'<option value="'+p+'" '+(j.placement===p?'selected':'')+'>'+({feed:'Feed post',story:'Story',reel:'Reel',carousel:'Carousel'}[p])+'</option>').join('');
+ showModal({title:'Edit Scheduled Post',body:'<div class="note">Changes are sent to WordPress. The server will reject edits after publishing starts. Original media stays unchanged.</div><div class="field"><label>Publishing destination</label><select id="jobPlacement">'+picks+'</select></div><div class="field"><label>Account</label><select id="jobAccount">'+options+'</select></div><div class="field"><label>Caption</label><textarea id="jobCaption">'+esc(j.caption||'')+'</textarea></div><div class="field"><label>Scheduled Date & Time (IST)</label><input id="jobTime" type="datetime-local" value="'+dateTimeLocalIST(j.scheduled_at)+'"></div>'+btn('Save on WordPress','submitJobEdit('+id+')','full')+btn('Back','showJobDetail('+id+')','secondary full')});
+}
+function submitJobEdit(id){
+ const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j||j.status!=='scheduled')return toast('This job is no longer editable');
+ const placement=document.getElementById('jobPlacement')?.value||'',account=document.getElementById('jobAccount')?.value||'',caption=document.getElementById('jobCaption')?.value||'',raw=document.getElementById('jobTime')?.value||'';
+ const stamp=Date.parse(raw+':00+05:30'),when=Math.floor(stamp/1000);
+ if(!Number.isFinite(when)||when<Date.now()/1000+120)return toast('Choose a future time at least two minutes ahead');
+ if(!account)return toast('Select a connected account');
+ if(!confirm('Update this scheduled WordPress job?'))return;
+ if(!window.PostFlowNative?.editWordPressJob)return toast('Updated Android app required');
+ PostFlowNative.editWordPressJob(id,placement,account,caption,when);closeModal();toast('Sending update to WordPress…');
+}
+function cancelServerJob(id){
+ const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j||j.status!=='scheduled')return toast('Only scheduled jobs can be cancelled');
+ if(!confirm('Cancel this WordPress publishing job? It will not be published if cancellation succeeds.'))return;
+ if(!window.PostFlowNative?.cancelWordPressJob)return toast('Updated Android app required');
+ PostFlowNative.cancelWordPressJob(id);closeModal();toast('Requesting cancellation…');
+}
 function showJobDetail(id){
  const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j)return;
  const actual=j.published_at?publishTime(j.published_at,j.status):publishTime(null,j.status);
- const attempted=j.attempted_at||j.last_attempt_at||j.last_attempt||null;
+ const attempted=j.attempted_at||null;
  const progress='<div class="card"><h3>Publishing Timeline</h3><p>① Scheduled · '+publishTime(j.scheduled_at)+'</p><p>② Attempted · '+publishTime(attempted)+'</p><p>③ '+(j.status==='published'?'Published':'Current status: '+esc(j.status))+' · '+actual+'</p></div>';
- showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+'<div class="note">For safe retries, verify whether the post is already live on Facebook or Instagram. A failed status can sometimes mean the server missed a confirmation.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
+ const actions=j.status==='scheduled'?'<div class="actions">'+btn('Edit Schedule','openJobEdit('+id+')')+btn('Cancel Schedule','cancelServerJob('+id+')','secondary')+'</div>':'';
+ showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+actions+'<div class="note">Verify the live platform post before retrying. Completed jobs cannot be edited.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
 }
 
 function openWordPressPair(){if(!window.PostFlowNative?.pairWordPress){toast('Android native app update required');return}showModal({title:'Pair WordPress',body:`<div class="note">Website: https://graphicanest.in. Generate your private pairing key in WordPress Settings → PostFlow Connect. Never share it in chat.</div><div class="field"><label>Private Pairing Key</label><input id="wpPairKey" type="password" autocomplete="off" placeholder="Paste pairing key"></div>${btn('Save Key & Sync','saveWordPressPair()','full')}`})}

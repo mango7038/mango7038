@@ -115,7 +115,7 @@ public final class NativeBridge {
                 org.json.JSONObject result=new org.json.JSONObject();
                 result.put("client_id",clientId);result.put("http_status",code);result.put("ok",code==201||code==200);
                 if(code==201||code==200){org.json.JSONObject response=new org.json.JSONObject(body);result.put("job",response.optJSONObject("job"));}
-                else result.put("error","WordPress upload rejected (HTTP "+code+")");
+                else {result.put("error",safeWordPressError(body,"WordPress upload rejected (HTTP "+code+")"));result.put("error_code",code);}
                 sendPublishResult(result.toString());
             }catch(Exception ex){
                 try{org.json.JSONObject result=new org.json.JSONObject();result.put("client_id",clientId);result.put("ok",false);result.put("error","Upload failed. Check connection and media; retry carefully.");sendPublishResult(result.toString());}catch(Exception ignored){}
@@ -175,7 +175,7 @@ public final class NativeBridge {
                 org.json.JSONObject result=new org.json.JSONObject();
                 result.put("client_id",clientId);result.put("http_status",status);result.put("ok",status==200||status==201);
                 if(status==200||status==201){result.put("job",new org.json.JSONObject(response).optJSONObject("job"));}
-                else result.put("error","Carousel upload rejected (HTTP "+status+")");
+                else {result.put("error",safeWordPressError(response,"Carousel upload rejected (HTTP "+status+")"));result.put("error_code",status);}
                 sendPublishResult(result.toString());
             }catch(Exception e){
                 try{org.json.JSONObject o=new org.json.JSONObject();o.put("client_id",clientId);o.put("ok",false);o.put("error","Carousel upload failed. Check images or connection.");sendPublishResult(o.toString());}catch(Exception ignored){}
@@ -198,6 +198,20 @@ public final class NativeBridge {
             }catch(Exception ex){sendPublishResult("{\"error\":\"Could not fetch publishing jobs\"}");}
             finally{if(c!=null)c.disconnect();}
         }).start();
+    }
+
+    private static String safeWordPressError(String body,String fallback){
+        if(body==null||body.length()>32768)return fallback;
+        try{
+            org.json.JSONObject data=new org.json.JSONObject(body);
+            String message=data.optString("message","");
+            String code=data.optString("code","");
+            if(message.length()<1)return fallback;
+            // Do not surface credentials, authorization parameters or long opaque tokens to WebView/logs.
+            String clean=message.replaceAll("(?i)(access_token|client_secret|authorization|bearer|password|api_key)\\s*[:=]\\s*\\S+","[credential redacted]");
+            clean=clean.replaceAll("[A-Za-z0-9_\\-]{65,}","[long identifier redacted]");
+            return (code.isEmpty()?"":code+": ")+clean.substring(0,Math.min(clean.length(),280));
+        }catch(Exception ignored){return fallback;}
     }
     private void sendPublishResult(String json){
         activity.runOnUiThread(()->activity.getWebViewForBridge().evaluateJavascript("window.onPostFlowPublish("+org.json.JSONObject.quote(json)+")",null));

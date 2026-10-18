@@ -196,7 +196,7 @@ public final class NativeBridge {
             try{
                 if(id<1)throw new IOException("Invalid job ID");
                 c=(java.net.HttpURLConnection)new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs/"+id).openConnection();
-                c.setRequestMethod(method);c.setConnectTimeout(12000);c.setReadTimeout(18000);
+                c.setRequestMethod("PATCH".equals(method)?"POST":method);if("PATCH".equals(method))c.setRequestProperty("X-HTTP-Method-Override","PATCH");c.setConnectTimeout(12000);c.setReadTimeout(18000);
                 c.setRequestProperty("Authorization","Bearer "+wordpressKey());
                 c.setRequestProperty("Accept","application/json");
                 if("PATCH".equals(method)){

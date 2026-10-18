@@ -58,9 +58,21 @@ jobs:
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           ls -lh "$APK"
+      - name: Check APK manifest and installable package metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          test -s "$APK"
+          unzip -t "$APK" | tail -n 2
+          "$AAPT" dump badging "$APK" | head -n 15
+          "$AAPT" dump badging "$APK" | grep -q "name='com.postflow.studio.v6'"
+          "$AAPT" dump badging "$APK" | grep -q "versionCode='63'"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-6.2.0-debug-apk
+          name: PostFlow-Studio-6.2.1-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

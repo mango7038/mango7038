@@ -49,6 +49,24 @@ jobs:
           else
             echo "::warning::No POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. This run uses a newly generated debug certificate; it may NOT update APKs from previous runs."
           fi
+      - name: Smoke-test WebView startup JavaScript
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs=require('fs'),vm=require('vm'),assert=require('assert');
+          const html=fs.readFileSync('app/src/main/assets/index.html','utf8');
+          const script=html.match(/<script>([\\s\\S]*?)<\\/script>/);
+          assert(script,'Inline application JavaScript missing');
+          const element=()=>({innerHTML:'',classList:{add(){},remove(){}},style:{},setAttribute(){},addEventListener(){},querySelectorAll(){return []},scrollTo(){},value:'',textContent:''});
+          const document={documentElement:element(),body:element(),getElementById:element,querySelector:element,querySelectorAll(){return []}};
+          const window={matchMedia(){return {matches:false,addEventListener(){}}},scrollTo(){}};
+          const localStorage={getItem(){return null},setItem(){}};
+          const context={document,window,localStorage,setTimeout(){},console,Intl,Date,JSON,Math,Set,Map};
+          vm.createContext(context);
+          vm.runInContext(script[1],context,{timeout:5000});
+          assert(document.getElementById('page'),'Page element not found');
+          console.log('PostFlow WebView startup smoke test PASS');
+          NODE
       - name: Build isolated V6 package debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Validate APK signature
@@ -68,11 +86,11 @@ jobs:
           unzip -t "$APK" | tail -n 2
           "$AAPT" dump badging "$APK" | head -n 15
           "$AAPT" dump badging "$APK" | grep -q "name='com.postflow.studio.v6'"
-          "$AAPT" dump badging "$APK" | grep -q "versionCode='65'"
+          "$AAPT" dump badging "$APK" | grep -q "versionCode='66'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-6.2.3-debug-apk
+          name: PostFlow-Studio-6.2.4-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

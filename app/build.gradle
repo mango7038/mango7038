@@ -8,8 +8,8 @@ android {
         applicationId 'com.postflow.studio.v6'
         minSdk 26
         targetSdk 35
-        versionCode 60
-        versionName '6.0.0'
+        versionCode 61
+        versionName '6.1.1'
     }
     buildTypes {
         release { minifyEnabled false }

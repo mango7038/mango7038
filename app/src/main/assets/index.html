@@ -94,7 +94,7 @@ function render(){navRender();const el=document.getElementById('page');let c=cou
  const upcoming=[...state.posts].filter(p=>p.status==='scheduled').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,4);
  const jobs=state.wpServerJobs||[],failed=jobs.filter(j=>['failed','attention','error'].includes(j.status)).length;
  const published=jobs.filter(j=>j.status==='published'&&j.verification_status==='verified').length;
- el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.2</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
+ el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.3</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
  +'<div class="card hero-create"><b>Ready for your next post?</b><p class="sub">Photos, Reels and carousels in one simple flow.</p>'+btn('＋ Create Post','compose()','full')+'</div>'
  +'<div class="stats compact-stats"><div class="stat"><small>Scheduled locally</small><b>'+c.scheduled+'</b></div><div class="stat"><small>Published on server</small><b>'+published+'</b></div><div class="stat"><small>Publishing errors</small><b>'+failed+'</b></div></div>'
  +(failed?'<div class="detail-error" onclick="refreshPublishJobs()"><strong>'+failed+' publishing job(s) need attention</strong><p>Tap to open the Publishing Center and see the actual error.</p></div>':'')
@@ -571,7 +571,7 @@ function regenerateZipCaptions(){
  allowed.forEach(p=>{p.caption=zipCaption(p.title,p.category||pickCategory(p.mediaName||p.title),p.mediaName||p.title);p.captionApproved=false;});
  save();route('library');toast('Regenerated captions for '+allowed.length+' ZIP posts. Review before publishing.');
 }
-function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one captions.txt with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. A review screen is shown before any post is scheduled. Auto mode submits only confirmed eligible posts to WordPress. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
+function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one TXT (any filename) with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. A review screen is shown before any post is scheduled. Auto mode submits only confirmed eligible posts to WordPress. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
 async function thumbnail(bytes,mime){return new Promise(resolve=>{if(!mime.startsWith('image/'))return resolve('');let blob=new Blob([bytes],{type:mime}),u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{let c=document.createElement('canvas'),scale=Math.min(1,160/Math.max(im.width,im.height));c.width=Math.round(im.width*scale);c.height=Math.round(im.height*scale);let ctx=c.getContext('2d');ctx.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);resolve(c.toDataURL('image/jpeg',.58))};im.onerror=()=>{URL.revokeObjectURL(u);resolve('')};im.src=u})}
 function safeFileName(name){return String(name||'media').split('/').pop().slice(0,160)}
 function base64Chunk(bytes){let result='';for(let i=0;i<bytes.length;i++)result+=String.fromCharCode(bytes[i]);return btoa(result)}
@@ -658,6 +658,19 @@ function csvRows(text){
 }
 function parseManifestDate(value){if(!value)return '';let d=guessDate(value);return d||(/^\d{4}-\d{2}-\d{2}$/.test(value)?value:'')}
 async 
+async function findZipMetadataTxt(zip){
+ const textFiles=Object.values(zip.files).filter(e=>!e.dir&&/\.txt$/i.test(e.name)&&!e.name.startsWith('__MACOSX/'));
+ if(textFiles.length>15)throw Error('Too many TXT files in ZIP');
+ const usable=[];
+ for(const item of textFiles){
+  if((item._data?.uncompressedSize||0)>1024*1024)continue;
+  const raw=await item.async('text');
+  if(/^\s*\[POST\]\s*$/im.test(raw))usable.push({name:item.name,raw,structured:true});
+  else if(/(^|\/)captions\.txt$/i.test(item.name))usable.push({name:item.name,raw,structured:false});
+ }
+ if(usable.filter(x=>x.structured).length>1)throw Error('Multiple festival [POST] TXT files. Keep only one.');
+ return usable.find(x=>x.structured)||usable[0]||null;
+}
 let zipReviewSession=null;
 async function processZip(){
  const file=document.getElementById('zipInput')?.files?.[0];
@@ -669,13 +682,12 @@ async function processZip(){
   const zip=await JSZip.loadAsync(file,{checkCRC32:true});
   const entries=Object.values(zip.files).filter(e=>!e.dir&&/\.(png|jpe?g|webp|mp4|mov)$/i.test(e.name)&&!e.name.startsWith('__MACOSX/'));
   if(!entries.length||entries.length>250)throw Error('Expected 1–250 media files');
-  const txt=Object.values(zip.files).filter(e=>!e.dir&&/(^|\/)captions\.txt$/i.test(e.name));
-  if(txt.length>1)throw Error('Only one captions.txt is supported');
+  const txt=await findZipMetadataTxt(zip);
   const csv=Object.values(zip.files).find(e=>!e.dir&&/(^|\/)manifest\.csv$/i.test(e.name));
   const manifest=csv?csvRows(await csv.async('text')):{};
-  const raw=txt.length?await txt[0].async('text'):'';
+  const raw=txt?.raw||'';
   const structured=/^\s*\[POST\]\s*$/im.test(raw)?parseFestivalPostTxt(raw):null;
-  const legacy=txt.length&&!structured?zipCaptionTextMap(raw):null;
+  const legacy=txt&&!structured?zipCaptionTextMap(raw):null;
   const counts=new Map();
   entries.forEach(e=>counts.set(safeFileName(e.name),(counts.get(safeFileName(e.name))||0)+1));
   const rows=entries.map(e=>{
@@ -746,11 +758,10 @@ async function importZipAfterReview(){
    if(compressedSize>500*1024*1024)throw Error('Extracted media exceeds 500 MB');
    let csv=Object.values(zip.files).find(e=>!e.dir && /(^|\/)manifest\.csv$/i.test(e.name));
    let manifest=csv?csvRows(await csv.async('text')):{};
-   const captionFiles=Object.values(zip.files).filter(e=>!e.dir&&/(^|\/)captions\.txt$/i.test(e.name));
-   if(captionFiles.length>1)throw Error('Only one captions.txt is supported');
-   const txtContent=captionFiles.length?await captionFiles[0].async('text'):'';
+   const captionFile=await findZipMetadataTxt(zip);
+   const txtContent=captionFile?.raw||'';
    const festivalMap=/^\s*\[POST\]\s*$/im.test(txtContent)?parseFestivalPostTxt(txtContent):null;
-   const captionMap=captionFiles.length&&!festivalMap?zipCaptionTextMap(txtContent):null;
+   const captionMap=captionFile&&!festivalMap?zipCaptionTextMap(txtContent):null;
    let captionWarnings=festivalMap?[...festivalMap.warnings]:captionMap?[...captionMap.dupes].map(x=>'Duplicate caption header: '+x):[];
    const toSubmit=[];let queued=0;
    const nameCounts=new Map();entries.forEach(e=>{const name=safeFileName(e.name);nameCounts.set(name,(nameCounts.get(name)||0)+1)});

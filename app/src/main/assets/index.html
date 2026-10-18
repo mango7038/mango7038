@@ -360,8 +360,8 @@ window.onPostFlowPublish=function(raw){
   else if(r.error)toast(r.error);
  }catch(e){toast('Unexpected publishing response');}
 };
-function publishTime(v){return v?new Date(v*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+' IST':'Not published yet'}
-function publishingHistory(id){const items=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===id);return items.length?'<div class="card"><h3>Publishing History</h3>'+items.map(j=>'<div class="item"><div class="body"><b>'+esc(j.account)+' · '+esc(j.placement)+'</b><small>Status: '+esc(j.status)+'</small><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at)+'</small></div></div>').join('')+'</div>':''}
+function publishTime(v,status){return v?new Date(v*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+' IST':(status==='published'?'Not recorded (older post)':'Not published yet')}
+function publishingHistory(id){const items=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===id);return items.length?'<div class="card"><h3>Publishing History</h3>'+items.map(j=>'<div class="item"><div class="body"><b>'+esc(j.account)+' · '+esc(j.placement)+'</b><small>Status: '+esc(j.status)+'</small><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small></div></div>').join('')+'</div>':''}
 function showPublishJobs(){
  const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+' · '+esc(j.status)+'</b><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at)+'</small><small>'+esc(j.error||'')+'</small></div></div>').join('');
  showModal({title:'Publishing Jobs',body:'<p class="sub">Server jobs. Scheduled and actual published times are separate.</p>'+(jobs||'<div class="empty">No server jobs yet</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});

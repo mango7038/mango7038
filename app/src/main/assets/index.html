@@ -474,6 +474,68 @@ function makeCaption(name,category,variation=0){
  const local=['graphic','interior','architecture','civil'].includes(kind)?'\n\nLooking for design support in Indore? Connect with GraphicaNest.':'';
  return templates[kind][(variety+variation)%3]+local+'\n\n'+tags[kind];
 }
+function parseFestivalPostTxt(raw){
+ const records=[],warnings=[],seen=new Set();
+ const lines=String(raw||'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').split('\n');
+ let current=null,lastField=null;
+ const close=()=>{if(!current)return;current.filename=String(current.filename||'').trim().replace(/\\/g,'/');
+   if(!current.filename){warnings.push('TXT [POST] without filename skipped');current=null;return;}
+   if(seen.has(current.filename))warnings.push('Duplicate [POST] filename: '+current.filename);
+   seen.add(current.filename);records.push(current);current=null;lastField=null;
+ };
+ for(const line of lines){
+   if(/^\s*\[POST\]\s*$/i.test(line)){close();current={};lastField=null;continue;}
+   if(/^\s*\[\/POST\]\s*$/i.test(line)){close();continue;}
+   if(!current||!line.trim()&&lastField!=='caption'&&lastField!=='greeting')continue;
+   const field=line.match(/^\s*(filename|title|type|platform|date|time|greeting|caption)\s*=(.*)$/i);
+   if(field){lastField=field[1].toLowerCase();current[lastField]=field[2].trim();}
+   else if((lastField==='caption'||lastField==='greeting'))current[lastField]+='\n'+line;
+   else if(line.trim())warnings.push('Unexpected TXT line: '+line.slice(0,70));
+ }
+ close();
+ const byFilename=new Map(),duplicates=new Set();
+ records.forEach(r=>{if(byFilename.has(r.filename))duplicates.add(r.filename);else byFilename.set(r.filename,r);});
+ return {byFilename,duplicates,warnings};
+}
+function matchFestivalPostTxt(path,data){
+ if(!data)return {record:null,warning:''};
+ const key=String(path).replace(/\\/g,'/');
+ if(data.duplicates.has(key))return {record:null,warning:'Duplicate TXT filename: '+key};
+ if(data.byFilename.has(key))return {record:data.byFilename.get(key),warning:''};
+ const matches=[...data.byFilename.keys()].filter(k=>safeFileName(k)===safeFileName(key));
+ if(matches.length>1||matches.some(k=>data.duplicates.has(k)))return {record:null,warning:'Ambiguous TXT filename: '+safeFileName(key)};
+ if(matches.length===1)return {record:data.byFilename.get(matches[0]),warning:''};
+ return {record:null,warning:'TXT record missing: '+safeFileName(key)};
+}
+function festivalPostTargets(record,defaults){
+ if(!record)return {targets:[...defaults],warning:''};
+ const platforms=String(record.platform||'instagram').toLowerCase().split(/[,|;]/).map(p=>p.trim()).filter(Boolean);
+ const type=String(record.type||'post').toLowerCase().trim();
+ const chosen=[];
+ if(!['post','story','reel'].includes(type))return {targets:[],warning:'Unsupported placement: '+type};
+ for(const platform of platforms){
+  if(platform==='instagram')chosen.push(type==='story'?'ig_story':'ig_feed');
+  else if(platform==='facebook')chosen.push(type==='story'?'fb_story':'fb_feed');
+  else return {targets:[],warning:'Unsupported platform: '+platform};
+ }
+ if(!chosen.length)return {targets:[],warning:'Missing publishing platform'};
+ if(type==='reel')return {targets:[],warning:'Reel scheduling from TXT needs separate video support. Saved as draft.'};
+ return {targets:[...new Set(chosen)],warning:''};
+}
+function validFestivalDateTime(date,time){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time))return false;
+ const ms=Date.parse(date+'T'+time+':00+05:30');
+ return Number.isFinite(ms)&&new Date(ms+330*60000).toISOString().slice(0,16)===date+'T'+time;
+}
+function wordpressTargetsForImported(post){
+ const accounts=(state.wpAccounts||[]).filter(a=>a.platform==='instagram'||a.platform==='facebook');
+ const selected=[];
+ for(const a of accounts){
+  if(post.targets.includes(a.platform==='instagram'?'ig_feed':'fb_feed'))selected.push({a,placement:'feed'});
+  if(post.targets.includes(a.platform==='instagram'?'ig_story':'fb_story'))selected.push({a,placement:'story'});
+ }
+ return selected;
+}
 function zipCaptionTextMap(raw){
  const map=new Map(),dupes=new Set();let key=null,lines=[];
  const flush=()=>{if(!key)return;const caption=lines.join('\n').trim();if(map.has(key))dupes.add(key);else if(caption)map.set(key,caption);key=null;lines=[];};
@@ -509,7 +571,7 @@ function regenerateZipCaptions(){
  allowed.forEach(p=>{p.caption=zipCaption(p.title,p.category||pickCategory(p.mediaName||p.title),p.mediaName||p.title);p.captionApproved=false;});
  save();route('library');toast('Regenerated captions for '+allowed.length+' ZIP posts. Review before publishing.');
 }
-function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Automatically schedule valid posts</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">GraphicaNest natural SEO captions are generated offline from filenames or manifest titles (not AI image recognition). Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
+function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one captions.txt with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. Auto mode submits eligible posts to WordPress when paired; otherwise they remain drafts. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
 async function thumbnail(bytes,mime){return new Promise(resolve=>{if(!mime.startsWith('image/'))return resolve('');let blob=new Blob([bytes],{type:mime}),u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{let c=document.createElement('canvas'),scale=Math.min(1,160/Math.max(im.width,im.height));c.width=Math.round(im.width*scale);c.height=Math.round(im.height*scale);let ctx=c.getContext('2d');ctx.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);resolve(c.toDataURL('image/jpeg',.58))};im.onerror=()=>{URL.revokeObjectURL(u);resolve('')};im.src=u})}
 function safeFileName(name){return String(name||'media').split('/').pop().slice(0,160)}
 function base64Chunk(bytes){let result='';for(let i=0;i<bytes.length;i++)result+=String.fromCharCode(bytes[i]);return btoa(result)}
@@ -612,8 +674,11 @@ async function processZip(){
    let manifest=csv?csvRows(await csv.async('text')):{};
    const captionFiles=Object.values(zip.files).filter(e=>!e.dir&&/(^|\/)captions\.txt$/i.test(e.name));
    if(captionFiles.length>1)throw Error('Only one captions.txt is supported');
-   const captionMap=captionFiles.length?zipCaptionTextMap(await captionFiles[0].async('text')):null;
-   let captionWarnings=captionMap?[...captionMap.dupes].map(x=>'Duplicate caption header: '+x):[];
+   const txtContent=captionFiles.length?await captionFiles[0].async('text'):'';
+   const festivalMap=/^\s*\[POST\]\s*$/im.test(txtContent)?parseFestivalPostTxt(txtContent):null;
+   const captionMap=captionFiles.length&&!festivalMap?zipCaptionTextMap(txtContent):null;
+   let captionWarnings=festivalMap?[...festivalMap.warnings]:captionMap?[...captionMap.dupes].map(x=>'Duplicate caption header: '+x):[];
+   const toSubmit=[];let queued=0;
    let seen=new Set(state.posts.map(p=>p.fingerprint).filter(Boolean));
    let times=new Set(state.posts.filter(p=>p.status==='scheduled').map(p=>p.date+'|'+p.time));
    for(let f of entries){
@@ -623,28 +688,47 @@ async function processZip(){
      if(seen.has(fingerprint)){duplicates++;continue}seen.add(fingerprint);
      let meta=manifest[f.name]||manifest[safeFileName(f.name)]||{};
      const matched=zipTextCaptionFor(f.name,captionMap);if(matched.warning)captionWarnings.push(matched.warning);
-     let date=guessDate(safeFileName(f.name))||parseManifestDate(meta.date)||guessDate(f.name),category=meta.category||pickCategory(f.name);
-     let title=String(meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);
+     const festival=matchFestivalPostTxt(f.name,festivalMap);if(festival.warning)captionWarnings.push(festival.warning);
+     const rec=festival.record;
+     const mappedTargets=festivalPostTargets(rec,targets);if(mappedTargets.warning)captionWarnings.push(safeFileName(f.name)+': '+mappedTargets.warning);
+     let date=rec?.date||parseManifestDate(meta.date)||guessDate(safeFileName(f.name))||guessDate(f.name),category=meta.category||pickCategory(rec?.title||f.name);
+     let title=String(rec?.title||meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);
      let mime=video?'video/mp4':/\.png$/i.test(f.name)?'image/png':/\.webp$/i.test(f.name)?'image/webp':'image/jpeg';
      let mediaId=uid(),written=await persistMedia(mediaId,safeFileName(f.name),bytes);
      if(!written){skipped++;continue}
      let thumb=video?'':await thumbnail(bytes,mime);
-     let time=/^([01]\d|2[0-3]):[0-5]\d$/.test(meta.time||'')?meta.time:state.settings.time;
-     let selected=(meta.destinations||meta.targets)?String(meta.destinations||meta.targets).split(/[|;]/).map(t=>t.trim()).filter(t=>DEST.some(d=>d[0]===t)):targets;
-     let shouldSchedule=mode==='auto'&&date&&date>=dateLocal()&&category!=='birthday'&&selected.length>0;
-     if(shouldSchedule){while(times.has(date+'|'+time)){
+     let time=rec?.time||( /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(meta.time||'')?meta.time:state.settings.time);
+     let selected=rec?mappedTargets.targets:(meta.destinations||meta.targets)?String(meta.destinations||meta.targets).split(/[|;]/).map(t=>t.trim()).filter(t=>DEST.some(d=>d[0]===t)):targets;
+     const validDate=validFestivalDateTime(date||'',time);
+     if(rec&&!validDate)captionWarnings.push('Invalid date/time: '+safeFileName(f.name));
+     const future=validDate&&Date.parse(date+'T'+time+':00+05:30')>=Date.now()+120000;
+     const hasTxtRecord=!festivalMap||!!rec;
+     let shouldSchedule=mode==='auto'&&future&&hasTxtRecord&&(!rec||!mappedTargets.warning)&&category!=='birthday'&&selected.length>0;
+     if(shouldSchedule&&!rec){while(times.has(date+'|'+time)){
        let [h,m]=time.split(':').map(Number),newMin=h*60+m+15;
        if(newMin>=1440){shouldSchedule=false;break}
        time=String(Math.floor(newMin/60)).padStart(2,'0')+':'+String(newMin%60).padStart(2,'0');
      }if(shouldSchedule)times.add(date+'|'+time)}
      if(!shouldSchedule)review++;
-     state.posts.push({id:uid(),title,caption:zipCaption(title,category,f.name,matched.caption||meta.caption),captionApproved:!!String(matched.caption||meta.caption||'').trim(),captionSource:matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:shouldSchedule?'scheduled':'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name)});
+     const captionText=rec?.caption||matched.caption||meta.caption;
+     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(rec?.greeting||''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:rec?.type||'post'};
+     state.posts.push(post);
+     if(shouldSchedule)toSubmit.push(post);
      added++;
      if(category==='festival'&&date&&!state.events.some(e=>e.title.toLowerCase()===title.toLowerCase()&&e.date===date))
        state.events.push({id:uid(),title,date,type:'festival',repeat:false,private:false});
    }
-   state.imports.unshift({id:uid(),name:file.name,imported:new Date().toLocaleDateString('en-IN'),added,duplicates,skipped,review});
-   state.lastZipCaptionWarnings=captionWarnings.slice(0,15);save();closeModal();route('library');toast(`Imported ${added} with captions. ${captionWarnings.length} mapping warning(s).`);
+   // Do not label a post Scheduled until WordPress confirms acceptance.
+   if(mode==='auto'&&toSubmit.length){
+     if(!hasWordPressPair()||!window.PostFlowNative?.queueWordPressPost){captionWarnings.push('WordPress not paired: eligible posts were saved as drafts, not scheduled.');}
+     else for(const post of toSubmit){
+       const destination=wordpressTargetsForImported(post);
+       if(destination.length!==post.targets.filter(t=>['ig_feed','ig_story','fb_feed','fb_story'].includes(t)).length){captionWarnings.push('Connected account missing for '+post.title+' — saved draft');continue;}
+       submitDirectWordPress(post,destination);queued++;
+     }
+   }
+   state.imports.unshift({id:uid(),name:file.name,imported:new Date().toLocaleDateString('en-IN'),added,duplicates,skipped,review,submitted:queued});
+   state.lastZipCaptionWarnings=captionWarnings.slice(0,15);save();closeModal();route('library');toast(`Imported ${added}; submitted ${queued} to WordPress (awaiting acceptance). ${captionWarnings.length} warning(s).`);
  }catch(e){toast('Import failed: '+String(e.message).slice(0,95));console.error(e)}
  finally{if(control){control.disabled=false;control.textContent='Import and Process ZIP'}}
 }

@@ -79,7 +79,6 @@ public final class MainActivity extends Activity {
                 return true;
             }
         });
-        setContentView(web);
         EventScheduler.reschedule(this);
         showPinGate();
     }
@@ -106,30 +105,75 @@ public final class MainActivity extends Activity {
             requestPin(true, null);
         }else requestPin(false,null);
     }
+
     private void requestPin(boolean create,String confirm){
+        final boolean light=(getResources().getConfiguration().uiMode &
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK)==android.content.res.Configuration.UI_MODE_NIGHT_NO;
+        final int bg=light?0xfff5f6fa:0xff0d1120, fg=light?0xff202840:0xfff7f7ff,muted=light?0xff69748a:0xffa9b4d2;
+        android.widget.ScrollView scroll=new android.widget.ScrollView(this);
+        scroll.setFillViewport(true);scroll.setBackgroundColor(bg);
+        android.widget.LinearLayout root=new android.widget.LinearLayout(this);
+        root.setOrientation(android.widget.LinearLayout.VERTICAL);root.setGravity(android.view.Gravity.CENTER);
+        int pad=(int)(26*getResources().getDisplayMetrics().density);root.setPadding(pad,pad,pad,pad);
+        scroll.addView(root);
+        android.widget.TextView logo=new android.widget.TextView(this);
+        logo.setText("✦");logo.setTextColor(0xffa78bfa);logo.setTextSize(46);logo.setGravity(android.view.Gravity.CENTER);
+        root.addView(logo);
+        android.widget.TextView brand=new android.widget.TextView(this);
+        brand.setText("PostFlow Studio");brand.setTextColor(fg);brand.setTextSize(26);brand.setGravity(android.view.Gravity.CENTER);
+        brand.setTypeface(null,android.graphics.Typeface.BOLD);root.addView(brand);
+        android.widget.TextView subtitle=new android.widget.TextView(this);
+        subtitle.setText(create?(confirm==null?"Create your private 4–8 digit PIN":"Confirm your new PIN"):"Welcome back. Enter your PIN to unlock.");
+        subtitle.setTextColor(muted);subtitle.setTextSize(15);subtitle.setGravity(android.view.Gravity.CENTER);
+        android.widget.LinearLayout.LayoutParams subtitleMargin=new android.widget.LinearLayout.LayoutParams(-1,-2);
+        subtitleMargin.topMargin=(int)(12*getResources().getDisplayMetrics().density);
+        subtitleMargin.bottomMargin=(int)(22*getResources().getDisplayMetrics().density);
+        root.addView(subtitle,subtitleMargin);
         EditText input=new EditText(this);
         input.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        input.setSingleLine(true);
-        input.setHint("4–8 digit PIN");
-        AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle(create?(confirm==null?"Create PostFlow owner PIN":"Confirm owner PIN"):"Unlock PostFlow Studio")
-            .setMessage(create?"This protects your local clients and post library. Keep the PIN safe.":"Enter your local owner PIN to manage posts.")
-            .setView(input).setCancelable(false)
-            .setPositiveButton("Continue",(d,w)->{
-                String pin=input.getText().toString();
-                if(!PinGate.valid(pin)){
-                    showError("PIN must be 4–8 digits");requestPin(create,confirm);return;
-                }
-                if(create){
-                    if(confirm==null)requestPin(true,pin);
-                    else if(!confirm.equals(pin)){
-                        showError("PINs did not match. Try again.");requestPin(true,null);
-                    }else if(PinGate.setup(this,pin))unlockAndLoad();
-                    else{showError("Could not secure local PIN");requestPin(true,null);}
-                }else if(PinGate.verify(this,pin))unlockAndLoad();
-                else {showError("Incorrect PIN");requestPin(false,null);}
-            }).setNegativeButton("Exit",(d,w)->finish()).create();
-        dialog.show();
+        input.setSingleLine(true);input.setTextColor(fg);input.setHintTextColor(muted);
+        input.setHint("••••••");input.setTextSize(23);input.setGravity(android.view.Gravity.CENTER);
+        input.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(8)});
+        android.graphics.drawable.GradientDrawable inputBg=new android.graphics.drawable.GradientDrawable();
+        inputBg.setColor(light?0xffffffff:0xff1c2541);
+        inputBg.setCornerRadius(18*getResources().getDisplayMetrics().density);
+        inputBg.setStroke((int)(getResources().getDisplayMetrics().density),light?0xffd7ddec:0xff39415d);
+        input.setBackground(inputBg);input.setPadding(16,18,16,18);
+        root.addView(input,new android.widget.LinearLayout.LayoutParams(-1,-2));
+        android.widget.TextView error=new android.widget.TextView(this);
+        error.setTextColor(0xffe7677f);error.setTextSize(13);error.setGravity(android.view.Gravity.CENTER);
+        android.widget.LinearLayout.LayoutParams errorParams=new android.widget.LinearLayout.LayoutParams(-1,-2);
+        errorParams.topMargin=(int)(10*getResources().getDisplayMetrics().density);
+        root.addView(error,errorParams);
+        android.widget.CheckBox reveal=new android.widget.CheckBox(this);
+        reveal.setText("Show PIN");reveal.setTextColor(muted);
+        reveal.setOnCheckedChangeListener((button,checked)->{
+            input.setInputType(InputType.TYPE_CLASS_NUMBER|(checked?InputType.TYPE_NUMBER_VARIATION_NORMAL:InputType.TYPE_NUMBER_VARIATION_PASSWORD));
+            input.setSelection(input.length());
+        });root.addView(reveal);
+        android.widget.Button next=new android.widget.Button(this);
+        next.setText(create?"Continue":"Unlock Workspace");
+        next.setTextColor(0xffffffff);next.setAllCaps(false);next.setTextSize(16);
+        android.graphics.drawable.GradientDrawable purple=new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.LEFT_RIGHT,new int[]{0xff8269ed,0xffa187f8});
+        purple.setCornerRadius(16*getResources().getDisplayMetrics().density);next.setBackground(purple);
+        android.widget.LinearLayout.LayoutParams nextParams=new android.widget.LinearLayout.LayoutParams(-1,(int)(56*getResources().getDisplayMetrics().density));
+        nextParams.topMargin=(int)(12*getResources().getDisplayMetrics().density);root.addView(next,nextParams);
+        android.widget.TextView exit=new android.widget.TextView(this);exit.setText("Exit app");exit.setTextColor(muted);
+        exit.setGravity(android.view.Gravity.CENTER);exit.setPadding(12,23,12,12);root.addView(exit);
+        exit.setOnClickListener(v->finish());
+        next.setOnClickListener(v->{
+            String pin=input.getText().toString();
+            if(!PinGate.valid(pin)){error.setText("PIN must contain 4–8 digits.");return;}
+            if(create){
+                if(confirm==null)requestPin(true,pin);
+                else if(!confirm.equals(pin)){error.setText("PINs do not match. Try again.");input.setText("");}
+                else if(PinGate.setup(this,pin)){setContentView(web);unlockAndLoad();}
+                else error.setText("Could not save PIN securely.");
+            }else if(PinGate.verify(this,pin)){setContentView(web);unlockAndLoad();}
+            else{error.setText("Incorrect PIN. Please try again.");input.setText("");}
+        });
+        setContentView(scroll);
     }
     public void showError(String message) {runOnUiThread(()->Toast.makeText(this,message,Toast.LENGTH_LONG).show());}
     public void shareBackup(File backup) {

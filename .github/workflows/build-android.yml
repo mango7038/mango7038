@@ -55,7 +55,9 @@ jobs:
           node <<'NODE'
           const fs=require('fs'),vm=require('vm'),assert=require('assert');
           const html=fs.readFileSync('app/src/main/assets/index.html','utf8');
-          const script=html.match(/<script>([\\s\\S]*?)<\\/script>/);
+          const start=html.indexOf('<script>'),end=html.lastIndexOf('</script>');
+          assert(start>=0&&end>start,'Inline application JavaScript missing');
+          const script=html.slice(start+8,end);
           assert(script,'Inline application JavaScript missing');
           const element=()=>({innerHTML:'',classList:{add(){},remove(){}},style:{},setAttribute(){},addEventListener(){},querySelectorAll(){return []},scrollTo(){},value:'',textContent:''});
           const document={documentElement:element(),body:element(),getElementById:element,querySelector:element,querySelectorAll(){return []}};
@@ -63,7 +65,7 @@ jobs:
           const localStorage={getItem(){return null},setItem(){}};
           const context={document,window,localStorage,setTimeout(){},console,Intl,Date,JSON,Math,Set,Map};
           vm.createContext(context);
-          vm.runInContext(script[1],context,{timeout:5000});
+          vm.runInContext(script,context,{timeout:5000});
           assert(document.getElementById('page'),'Page element not found');
           console.log('PostFlow WebView startup smoke test PASS');
           NODE

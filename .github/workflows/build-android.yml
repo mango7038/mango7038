@@ -35,6 +35,20 @@ jobs:
           fi
           echo "Using $SDKMANAGER"
           "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - name: Restore persistent signing certificate when configured
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.POSTFLOW_DEBUG_KEYSTORE_BASE64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
+            mkdir -p "$HOME/.android"
+            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
+            chmod 600 "$HOME/.android/debug.keystore"
+            echo "Persistent debug signing key supplied."
+          else
+            echo "::warning::No POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. This run uses a newly generated debug certificate; it may NOT update APKs from previous runs."
+          fi
       - name: Build isolated V6 package debug APK
         run: gradle --no-daemon --stacktrace :app:assembleDebug
       - name: Validate APK signature
@@ -47,6 +61,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-V6-debug-apk
+          name: PostFlow-Studio-6.2.0-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

@@ -94,7 +94,7 @@ function render(){navRender();const el=document.getElementById('page');let c=cou
  const upcoming=[...state.posts].filter(p=>p.status==='scheduled').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,4);
  const jobs=state.wpServerJobs||[],failed=jobs.filter(j=>['failed','attention','error'].includes(j.status)).length;
  const published=jobs.filter(j=>j.status==='published').length;
- el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.1.1</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
+ el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.0</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
  +'<div class="card hero-create"><b>Ready for your next post?</b><p class="sub">Photos, Reels and carousels in one simple flow.</p>'+btn('＋ Create Post','compose()','full')+'</div>'
  +'<div class="stats compact-stats"><div class="stat"><small>Scheduled locally</small><b>'+c.scheduled+'</b></div><div class="stat"><small>Published on server</small><b>'+published+'</b></div><div class="stat"><small>Publishing errors</small><b>'+failed+'</b></div></div>'
  +(failed?'<div class="detail-error" onclick="refreshPublishJobs()"><strong>'+failed+' publishing job(s) need attention</strong><p>Tap to open the Publishing Center and see the actual error.</p></div>':'')
@@ -104,7 +104,7 @@ function render(){navRender();const el=document.getElementById('page');let c=cou
 }
 else if(page==='queue'){let posts=[...state.posts].sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));el.innerHTML=`<h2>Your Posts</h2><p class="sub">Tap a post to review or edit. WordPress server jobs are protected from local-only changes.</p><div class="actions">${btn('＋ New Post','compose()','')}${btn('View Calendar',"route('calendar')")}</div><div class="section"><h3>${posts.length} Posts</h3><a onclick="setBulkMode(!bulkMode)">${bulkMode?'Cancel selection':'☑ Bulk Select'}</a></div>${bulkMode?'<div class="card" style="margin-bottom:12px"><div class="topline"><b>'+bulkSelected.size+' selected</b><a onclick="bulkSelectAll()">Select all</a></div><div class="actions" style="margin-top:12px">'+btn('Pause selected','bulkChangeStatus("paused")','mini')+btn('Resume selected','bulkChangeStatus("scheduled")','mini')+btn('Edit selected','bulkEdit()','mini')+btn('Delete selected','bulkDelete()','mini secondary')+'</div></div>':''}<div class="card">${posts.length?posts.map(postItem).join(''):'<div class="empty">Your queue is empty.</div>'}</div>`}
 else if(page==='calendar')calendarRender(el);
-else if(page==='library'){el.innerHTML=`<h2>Smart ZIP Library</h2><p class="sub">Upload dated festivals, promotions, posters or Reels. Valid items are automatically scheduled at ${esc(state.settings.time)} IST.</p><div class="banner"><div><b>Auto Schedule from ZIP</b><small>Date detection · Caption suggestions<br>Duplicate checks · Manual edits</small></div>${btn('Upload ZIP','openZip()','')}</div><div class="section"><h3>ZIP Imports</h3></div><div class="actions">${btn('Regenerate ZIP Captions','regenerateZipCaptions()','secondary')}</div><div class="note">Imported captions use filenames or manifest titles. Review each caption before publishing. This is an offline template generator, not AI vision.</div><div class="card">${state.imports.length?state.imports.map(i=>`<div class="item"><div class="thumb">▣</div><div class="body"><b>${esc(i.name)}</b><small>${esc(i.imported)} • ${i.added} added • ${i.duplicates} duplicates</small></div></div>`).join(''):'<div class="empty">No ZIP files imported.</div>'}</div><div class="section"><h3>Media & Posts</h3><a onclick="route('queue')">Queue →</a></div><div class="card">${state.posts.length?state.posts.slice().reverse().map(postItem).join(''):'<div class="empty">Upload your content to get started.</div>'}</div>`}
+else if(page==='library'){el.innerHTML=`<h2>Smart ZIP Library</h2><p class="sub">Upload dated festivals, promotions, posters or Reels. Valid items are automatically scheduled at ${esc(state.settings.time)} IST.</p><div class="banner"><div><b>Auto Schedule from ZIP</b><small>Date detection · Caption suggestions<br>Duplicate checks · Manual edits</small></div>${btn('Upload ZIP','openZip()','')}</div><div class="section"><h3>ZIP Imports</h3></div><div class="actions">${btn('Regenerate ZIP Captions','regenerateZipCaptions()','secondary')}</div><div class="note">Imported captions use filenames or manifest titles. Review each caption before publishing. This is an offline template generator, not AI vision.</div>${(state.lastZipCaptionWarnings||[]).length?'<div class="detail-error"><b>Caption mapping warnings:</b><p>'+state.lastZipCaptionWarnings.map(esc).join('; ')+'</p></div>':''}<div class="card">${state.imports.length?state.imports.map(i=>`<div class="item"><div class="thumb">▣</div><div class="body"><b>${esc(i.name)}</b><small>${esc(i.imported)} • ${i.added} added • ${i.duplicates} duplicates</small></div></div>`).join(''):'<div class="empty">No ZIP files imported.</div>'}</div><div class="section"><h3>Media & Posts</h3><a onclick="route('queue')">Queue →</a></div><div class="card">${state.posts.length?state.posts.slice().reverse().map(postItem).join(''):'<div class="empty">Upload your content to get started.</div>'}</div>`}
 else if(page==='events'){let evs=nextEvents();el.innerHTML=`<h2>Festivals & Events</h2><p class="sub">2026 Maharashtra festival dates included; add your own occasions, client birthdays and reminders. Festival dates for other years should be verified.</p><div class="actions">${btn('＋ Add Event','editEvent()','')}${btn('Add Fixed Indian Days','seedIndianDays()')}${btn('Calendar',"route('calendar')")}</div><div class="section"><h3>Upcoming Events</h3></div><div class="card">${evs.length?evs.map(eventItem).join(''):'<div class="empty">Add your first festival or birthday.</div>'}</div><div class="section"><h3>Quick note</h3></div><div class="note">Yearly birthdays repeat automatically. Indian lunar festivals may change date every year and should be verified annually. Android notifications and home-screen Festival Widget are included in the native app project. Add the widget from your launcher after installation.</div>`}
 else if(page==='accounts'){const synced=state.wpAccounts||[];el.innerHTML=`<h2>Social Accounts</h2><p class="sub">Verified accounts from your WordPress connection.</p><div class="card"><b>WordPress Backend</b><p class="sub">https://graphicanest.in</p><div class="note">Pair once with the key generated in WordPress → Settings → PostFlow Connect. Your Meta tokens stay on WordPress. With PostFlow Connect v1.7, saved posts can be uploaded and queued for server publishing after platform reauthorization.</div><div class="actions">${btn('Pair WordPress','openWordPressPair()')}${btn('Sync Accounts','syncWordPressAccounts()')}${btn('Unpair','unpairWordPress()','secondary')}${btn('Publishing Jobs','refreshPublishJobs()','secondary')}</div><small>${esc(state.wpSyncStatus||'Not synced yet')}</small></div><div class="section"><h3>Verified Profiles</h3></div><div class="card">${synced.length?synced.map(a=>`<div class="item"><div class="thumb">◎</div><div class="body"><b>${esc(a.name)}</b><small>${esc(a.platform)} • Verified on WordPress</small></div><span class="tag green">Synced</span></div>`).join(''):'<div class="empty">No verified accounts synced yet.</div>'}</div><div class="section"><h3>Offline Labels</h3>${btn('Add Offline Label','addAccount()','secondary')}</div><div class="card">${state.accounts.length?state.accounts.map(a=>`<div class="item"><div class="body"><b>${esc(a.name)}</b><small>${esc(a.platform)} • Planning only</small></div><button class="rowbtn" onclick="deleteAccount('${a.id}')">Remove</button></div>`).join(''):'<div class="empty">No offline labels.</div>'}</div>`}
 else if(page==='settings'){el.innerHTML=`<h2>Settings</h2><p class="sub">Personal automation and Android notification preferences.</p>
@@ -144,7 +144,7 @@ function editPost(id){
   let d=p?{...p}:{title:'',caption:'',date:tenMinutesIST().date,time:tenMinutesIST().time,kind:'image',targets:[...state.settings.defaultTargets],accountTargets:{},status:'draft',thumb:'',mediaId:null};
   const acct=state.accounts.length?`<div class="section"><h3>Account-specific Destinations</h3></div><p class="sub">Select Feed or Story separately for each account, independent of other accounts. Local reminders only until API connection.</p>${state.accounts.map(a=>`<div class="card" style="margin:9px 0"><b>${esc(a.name)}</b><p class="sub">${esc(a.platform)}</p>${placementsForAccount(a).map(([key,label])=>`<div class="check"><input type="checkbox" id="account_${a.id}_${key}" ${((d.accountTargets||{})[a.id]||[]).includes(key)?'checked':''}><label for="account_${a.id}_${key}">${label}</label></div>`).join('')}</div>`).join('')}`:'';
   pendingCarouselFiles=[];
-  showModal({title:p?'Edit Scheduled Post':'Create New Post',body:`<div class="wizard-head"><b>New Post · Studio</b><div class="wizard-steps">${[1,2,3,4,5].map(i=>`<span class="wizard-pip ${i===1?'active':''}" id="composerPip_${i}"></span>`).join('')}</div><span class="wizard-count" id="wizardProgress">Step 1 of 5 · Details</span></div><div class="composer-stage" data-stage="1"><div class="field"><label>Post Title</label><input id="pTitle" value="${esc(d.title)}" placeholder="Festival / promotion / birthday"></div>
+  showModal({title:p?'Edit Scheduled Post':'Create New Post',body:`<div class="wizard-head"><b>New Post · Studio</b><div class="wizard-steps">${[1,2,3,4,5].map(i=>`<span class="wizard-pip ${i===1?'active':''}" id="composerPip_${i}"></span>`).join('')}</div><span class="wizard-count" id="wizardProgress">Step 1 of 3 · Content</span></div><div class="composer-stage" data-stage="1"><div class="field"><label>Post Title</label><input id="pTitle" value="${esc(d.title)}" placeholder="Festival / promotion / birthday"></div>
   ${p?publishingHistory(p.id):''}${p?serverEditWarning(p.id):''}
   <div class="field"><label>Caption</label><textarea id="pCaption" placeholder="Write a caption...">${esc(d.caption)}</textarea></div>
   <div class="actions">${btn('Generate SEO Caption','suggestCaption()','mini secondary')}</div>
@@ -159,8 +159,15 @@ function editPost(id){
   ${acct}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
   <div class="card"><b>Ready to Schedule</b><p class="sub">Your Step 4 destinations are used automatically. No need to select accounts again.</p><div id="reviewDestinations" class="note">Review your destinations.</div><div class="field"><label>Publishing date (IST)</label><input id="reviewDate" type="date" value="${esc(d.date)}" oninput="syncReviewSchedule()"></div><div class="field"><label>Publishing time (IST)</label><input id="reviewTime" type="time" value="${esc(d.time)}" oninput="syncReviewSchedule()"></div><div class="actions">${btn('10 minutes from now','setReviewTenMinutes()','mini secondary')}</div><div id="reviewTimeError" class="detail-error" style="display:none" role="alert"></div><small>WordPress requires a future time. Select at least two minutes ahead.</small></div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
   <div class="line"></div><div class="note">Schedule Post uses your already selected Step 4 destinations. WordPress acceptance confirms the job; draft saves only on this device.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
-  const steps=document.querySelectorAll('#overlay .composer-stage');
-  if(steps.length===5){steps[0].dataset.stage='2';steps[1].dataset.stage='1';steps[0].parentNode.insertBefore(steps[1],steps[0]);}
+  const steps=[...document.querySelectorAll('#overlay .composer-stage')];
+  if(steps.length===5){
+    const [caption,media,schedule,accounts,review]=steps;
+    media.dataset.stage='1';caption.dataset.stage='1';
+    accounts.dataset.stage='2';schedule.dataset.stage='3';review.dataset.stage='3';
+    const p=caption.parentNode;p.insertBefore(media,caption);p.insertBefore(accounts,schedule);
+  }
+  const bar=document.querySelector('.wizard-steps');
+  if(bar)bar.innerHTML=[1,2,3].map(n=>'<span class="wizard-pip" id="composerPip_'+n+'"></span>').join('');
   setComposerStage(1);updateRatioPreview();
 }
 
@@ -201,19 +208,19 @@ function setReviewTenMinutes(){
  syncReviewSchedule();
 }
 function setComposerStage(n){
- composerStage=Math.max(1,Math.min(5,n));
- const names=['Media','Caption','Schedule','Accounts','Review'];
+ composerStage=Math.max(1,Math.min(3,n));
+ const names=['Content','Publish To','When & Confirm'];
  document.querySelectorAll('.composer-stage').forEach(x=>{x.hidden=Number(x.dataset.stage)!==composerStage});
- for(let i=1;i<=5;i++)document.getElementById('composerPip_'+i)?.classList.toggle('active',i<=composerStage);
+ for(let i=1;i<=3;i++)document.getElementById('composerPip_'+i)?.classList.toggle('active',i<=composerStage);
  const progress=document.getElementById('wizardProgress');if(progress)progress.textContent='Step '+composerStage+' of 5 · '+names[composerStage-1];
  const back=document.getElementById('wizBack'),next=document.getElementById('wizNext');
  if(back)back.disabled=composerStage===1;
- if(next)next.style.display=composerStage===5?'none':'block';
- if(composerStage===5){syncReviewSchedule();updateReviewDestinations();}
+ if(next)next.style.display=composerStage===3?'none':'block';
+ if(composerStage===3){syncReviewSchedule();updateReviewDestinations();}
  document.querySelector('#overlay .sheet')?.scrollTo({top:0,behavior:'smooth'});
 }
 function moveComposer(delta){
- if(delta>0 && composerStage===2 && !document.getElementById('pTitle')?.value.trim())return toast('Enter post title first');
+ if(delta>0 && composerStage===1 && !document.getElementById('pTitle')?.value.trim())return toast('Enter post title first');
  setComposerStage(composerStage+delta);
 }
 function hasActiveServerJobs(id){return Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.serverId&&!['upload_failed','failed','cancelled'].includes(j.status))}
@@ -467,6 +474,26 @@ function makeCaption(name,category,variation=0){
  const local=['graphic','interior','architecture','civil'].includes(kind)?'\n\nLooking for design support in Indore? Connect with GraphicaNest.':'';
  return templates[kind][(variety+variation)%3]+local+'\n\n'+tags[kind];
 }
+function zipCaptionTextMap(raw){
+ const map=new Map(),dupes=new Set();let key=null,lines=[];
+ const flush=()=>{if(!key)return;const caption=lines.join('\n').trim();if(map.has(key))dupes.add(key);else if(caption)map.set(key,caption);key=null;lines=[];};
+ String(raw||'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').split('\n').forEach(line=>{
+  const match=line.match(/^\s*\[([^\]\r\n]+)\]\s*$/);
+  if(match){flush();key=match[1].trim().replace(/\\/g,'/');return;}
+  if(key)lines.push(line);
+ });
+ flush();return {map,dupes};
+}
+function zipTextCaptionFor(path,data){
+ if(!data)return {caption:'',warning:''};
+ const key=String(path).replace(/\\/g,'/');
+ if(data.dupes.has(key))return {caption:'',warning:'Duplicate TXT entry: '+key};
+ if(data.map.has(key))return {caption:data.map.get(key),warning:''};
+ const base=safeFileName(key);
+ const found=[...data.map.keys()].filter(k=>safeFileName(k)===base);
+ if(found.length>1||found.some(k=>data.dupes.has(k)))return {caption:'',warning:'Ambiguous filename: '+base};
+ return {caption:found.length===1?data.map.get(found[0]):'',warning:''};
+}
 function zipCaption(title,category,fullPath,existing=''){
  const manual=String(existing||'').trim();if(manual)return manual;
  const name=String(title||'').trim();
@@ -482,7 +509,7 @@ function regenerateZipCaptions(){
  allowed.forEach(p=>{p.caption=zipCaption(p.title,p.category||pickCategory(p.mediaName||p.title),p.mediaName||p.title);p.captionApproved=false;});
  save();route('library');toast('Regenerated captions for '+allowed.length+' ZIP posts. Review before publishing.');
 }
-function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Automatically schedule valid posts</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">GraphicaNest natural SEO captions are generated offline from filenames or manifest titles (not AI image recognition). Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
+function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Automatically schedule valid posts</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">GraphicaNest natural SEO captions are generated offline from filenames or manifest titles (not AI image recognition). Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
 async function thumbnail(bytes,mime){return new Promise(resolve=>{if(!mime.startsWith('image/'))return resolve('');let blob=new Blob([bytes],{type:mime}),u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{let c=document.createElement('canvas'),scale=Math.min(1,160/Math.max(im.width,im.height));c.width=Math.round(im.width*scale);c.height=Math.round(im.height*scale);let ctx=c.getContext('2d');ctx.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);resolve(c.toDataURL('image/jpeg',.58))};im.onerror=()=>{URL.revokeObjectURL(u);resolve('')};im.src=u})}
 function safeFileName(name){return String(name||'media').split('/').pop().slice(0,160)}
 function base64Chunk(bytes){let result='';for(let i=0;i<bytes.length;i++)result+=String.fromCharCode(bytes[i]);return btoa(result)}
@@ -583,6 +610,10 @@ async function processZip(){
    if(compressedSize>500*1024*1024)throw Error('Extracted media exceeds 500 MB');
    let csv=Object.values(zip.files).find(e=>!e.dir && /(^|\/)manifest\.csv$/i.test(e.name));
    let manifest=csv?csvRows(await csv.async('text')):{};
+   const captionFiles=Object.values(zip.files).filter(e=>!e.dir&&/(^|\/)captions\.txt$/i.test(e.name));
+   if(captionFiles.length>1)throw Error('Only one captions.txt is supported');
+   const captionMap=captionFiles.length?zipCaptionTextMap(await captionFiles[0].async('text')):null;
+   let captionWarnings=captionMap?[...captionMap.dupes].map(x=>'Duplicate caption header: '+x):[];
    let seen=new Set(state.posts.map(p=>p.fingerprint).filter(Boolean));
    let times=new Set(state.posts.filter(p=>p.status==='scheduled').map(p=>p.date+'|'+p.time));
    for(let f of entries){
@@ -591,6 +622,7 @@ async function processZip(){
      let crc=f._data?.crc32??bytes.reduce((h,b)=>((h*33)^b)>>>0,5381),fingerprint=bytes.length+':'+crc;
      if(seen.has(fingerprint)){duplicates++;continue}seen.add(fingerprint);
      let meta=manifest[f.name]||manifest[safeFileName(f.name)]||{};
+     const matched=zipTextCaptionFor(f.name,captionMap);if(matched.warning)captionWarnings.push(matched.warning);
      let date=guessDate(safeFileName(f.name))||parseManifestDate(meta.date)||guessDate(f.name),category=meta.category||pickCategory(f.name);
      let title=String(meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);
      let mime=video?'video/mp4':/\.png$/i.test(f.name)?'image/png':/\.webp$/i.test(f.name)?'image/webp':'image/jpeg';
@@ -606,13 +638,13 @@ async function processZip(){
        time=String(Math.floor(newMin/60)).padStart(2,'0')+':'+String(newMin%60).padStart(2,'0');
      }if(shouldSchedule)times.add(date+'|'+time)}
      if(!shouldSchedule)review++;
-     state.posts.push({id:uid(),title,caption:zipCaption(title,category,f.name,meta.caption),captionApproved:!!String(meta.caption||'').trim(),kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:shouldSchedule?'scheduled':'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name)});
+     state.posts.push({id:uid(),title,caption:zipCaption(title,category,f.name,matched.caption||meta.caption),captionApproved:!!String(matched.caption||meta.caption||'').trim(),captionSource:matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:shouldSchedule?'scheduled':'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name)});
      added++;
      if(category==='festival'&&date&&!state.events.some(e=>e.title.toLowerCase()===title.toLowerCase()&&e.date===date))
        state.events.push({id:uid(),title,date,type:'festival',repeat:false,private:false});
    }
    state.imports.unshift({id:uid(),name:file.name,imported:new Date().toLocaleDateString('en-IN'),added,duplicates,skipped,review});
-   save();closeModal();route('library');toast(`Imported ${added} with captions. Review Posts; skipped ${duplicates} duplicates, ${skipped} unsupported/large`);
+   state.lastZipCaptionWarnings=captionWarnings.slice(0,15);save();closeModal();route('library');toast(`Imported ${added} with captions. ${captionWarnings.length} mapping warning(s).`);
  }catch(e){toast('Import failed: '+String(e.message).slice(0,95));console.error(e)}
  finally{if(control){control.disabled=false;control.textContent='Import and Process ZIP'}}
 }

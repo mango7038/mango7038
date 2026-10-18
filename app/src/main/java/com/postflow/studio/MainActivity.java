@@ -72,6 +72,8 @@ public final class MainActivity extends Activity {
                 if (fileCallback != null) fileCallback.onReceiveValue(null);
                 fileCallback=callback;
                 Intent intent=fileChooserParams.createIntent();
+                if(fileChooserParams.getMode()==FileChooserParams.MODE_OPEN_MULTIPLE){intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE,true);intent.setAction(Intent.ACTION_GET_CONTENT);}
+                intent.addCategory(Intent.CATEGORY_OPENABLE);
                 try{ startActivityForResult(intent, FILE_PICKER); }
                 catch(Exception ex){fileCallback.onReceiveValue(null); fileCallback=null; return false;}
                 return true;
@@ -89,7 +91,12 @@ public final class MainActivity extends Activity {
             new Thread(()->restoreArchive(selected)).start();
         }
         if(requestCode == FILE_PICKER && fileCallback!=null){
-            fileCallback.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(resultCode,data));
+            java.util.ArrayList<Uri> picked=new java.util.ArrayList<>();
+            if(resultCode==RESULT_OK && data!=null){
+                if(data.getClipData()!=null){for(int i=0;i<data.getClipData().getItemCount();i++){Uri uri=data.getClipData().getItemAt(i).getUri();if(uri!=null&&!picked.contains(uri))picked.add(uri);}}
+                if(data.getData()!=null&&!picked.contains(data.getData()))picked.add(data.getData());
+            }
+            fileCallback.onReceiveValue(picked.isEmpty()?null:picked.toArray(new Uri[0]));
             fileCallback=null;
         }
     }

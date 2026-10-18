@@ -384,14 +384,30 @@ async function normalizeCarouselImage(file,ratio,fitMode){
  // Render to a common Instagram-supported canvas dimension before persisting/uploading.
  // The user's original File remains untouched.
  const dimensions=ratio==='1:1'?[1080,1080]:[1080,1350];
+ // Android WebView loads this UI from file://. Blob URLs may fail in that origin.
+ // Read the chosen content URI as bytes and decode through a data URL first.
+ // Blob URL is retained only as a fallback for compatible environments.
  const blobURL=URL.createObjectURL(file);
  try{
-   const image=await new Promise((resolve,reject)=>{
+   const loadImage=(src)=>new Promise((resolve,reject)=>{
      const img=new Image();
      img.onload=()=>resolve(img);
-     img.onerror=()=>reject(Error('Could not decode '+file.name));
-     img.src=blobURL;
+     img.onerror=()=>reject(Error('Image decode failed'));
+     img.src=src;
    });
+   let image;
+   try{
+     const dataURL=await new Promise((resolve,reject)=>{
+       const reader=new FileReader();
+       reader.onload=()=>resolve(reader.result);
+       reader.onerror=()=>reject(Error('Could not read photo from device'));
+       reader.readAsDataURL(file);
+     });
+     image=await loadImage(dataURL);
+   }catch(primaryError){
+     try{image=await loadImage(blobURL)}
+     catch(fallbackError){throw Error('Cannot open '+file.name+'. Try reselecting it from Gallery or exporting it as a normal JPEG. '+primaryError.message)}
+   }
    const iw=image.naturalWidth,ih=image.naturalHeight;
    if(!iw||!ih)throw Error('Invalid image dimensions');
    const canvas=document.createElement('canvas');

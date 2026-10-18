@@ -67,12 +67,12 @@ function fmt(s){if(!s)return'Unknown date';let d=new Date(s+'T12:00:00Z');return
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function due(p){return p.status==='scheduled' && (p.date<dateLocal()||(p.date===dateLocal()&&p.time <= new Intl.DateTimeFormat('en-GB',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date())))}
 function counts(){return{scheduled:state.posts.filter(x=>x.status==='scheduled'&&!due(x)).length,drafts:state.posts.filter(x=>x.status==='draft').length,due:state.posts.filter(x=>due(x)).length,events:state.events.length}}
-function notifyDue(){if(state.settings.notifications){let d=state.posts.filter(due).length;if(d)toast(`${d} post(s) need publishing action. API auto-posting is not connected.`)}}
+function notifyDue(){if(state.settings.notifications){let d=state.posts.filter(due).length;if(d)toast(`${d} local posting reminder(s) are due. Check server Publishing Jobs separately.`)}}
 function route(p){page=p;if(p!=='queue'){bulkMode=false;bulkSelected.clear()}render();window.scrollTo(0,0)}
 function toast(msg){let el=document.getElementById('toast');el.textContent=msg;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2900)}
 function btn(label,fn,cls='secondary'){return `<button class="btn ${cls}" onclick="${fn}">${label}</button>`}
 function media(p){return p.thumb?`<img class="thumb" src="${p.thumb}">`:`<div class="thumb">${p.kind==='reel'?'▶':'▧'}</div>`}
-function tag(p){return p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">Needs action</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':'<span class="tag green">Scheduled</span>'}
+function tag(p){return p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">Reminder due</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':'<span class="tag green">Scheduled</span>'}
 function postItem(p){return `<div class="item" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">${bulkMode?`<input type="checkbox" aria-label="Select post" style="width:20px;min-width:20px;accent-color:#987bff" ${bulkSelected.has(p.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${p.id}')">`:''}${media(p)}<div class="body"><b>${esc(p.title||'Untitled Post')}</b><small>${fmt(p.date)} • ${esc(p.time||'09:00')} IST</small><small>${(p.targets||[]).length} channel(s) • ${Object.keys(p.accountTargets||{}).length} selected account(s)</small></div>${tag(p)}</div>`}
 function eventItem(ev){return `<div class="item" onclick="editEvent('${ev.id}')"><div class="thumb">${ev.type==='birthday'?'🎂':ev.type==='festival'?'🪔':'📆'}</div><div class="body"><b>${esc(ev.title)}</b><small>${fmt(ev.date)}${ev.repeat?' • Yearly':''}</small></div><span class="tag">${esc(ev.type)}</span></div>`}
 function openMenu(){showModal({title:'PostFlow Studio · Menu',body:`<div class="actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${[['home','⌂ Home'],['queue','▤ Post Queue'],['calendar','▦ Calendar'],['library','▧ ZIP Library'],['events','♧ Festivals & Events'],['accounts','◎ Social Accounts'],['settings','⚙ Settings'],['api','🔌 API Connections'],['trash','♻ Recycle Bin'],['brands','◈ Brand Profiles'],['captions','✎ Caption Library'],['mediaSearch','⌕ Media Search']].map(([p,t])=>`<button class="btn secondary" onclick="closeModal();${p==='api'?'apiManager()':p==='trash'?'recycleBin()':p==='brands'?'brandProfiles()':p==='captions'?'captionLibrary()':p==='mediaSearch'?'mediaSearch()':`route('${p}')`}">${t}</button>`).join('')}</div><div class="note" style="margin-top:15px">PostFlow Studio v5.0.0 · Offline scheduling. Official API publishing not connected.</div>`})}
@@ -107,7 +107,7 @@ function calendarRender(el){let y=calMonth.getFullYear(),m=calMonth.getMonth(),s
 function changeMonth(d){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+d,1);render()}
 function selectDay(d){selectedDay=d;render()}
 function showModal(html){document.getElementById('overlay').innerHTML=`<div class="modal"><div class="sheet"><div class="sheet-head"><h3>${html.title}</h3><button class="x" onclick="closeModal()">×</button></div>${html.body}</div></div>`;document.body.classList.add('no-scroll')}
-function closeModal(){document.getElementById('overlay').innerHTML='';document.body.classList.remove('no-scroll')}
+function closeModal(){if(typeof carouselPreviewUrls!=='undefined'){carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];}document.getElementById('overlay').innerHTML='';document.body.classList.remove('no-scroll')}
 function compose(){editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];editPost(null)}
 function placementsForAccount(a){let platform=a.platform;
  if(platform==='Instagram')return DEST.filter(x=>x[0].startsWith('ig_'));
@@ -155,8 +155,46 @@ function moveComposer(delta){
  setComposerStage(composerStage+delta);
 }
 function suggestCaption(){const title=document.getElementById('pTitle').value.trim()||'Special Day';document.getElementById('pCaption').value=makeCaption(title,pickCategory(title));toast('Offline caption generated — review before posting')}
+let pendingCarouselFiles=[],carouselPreviewUrls=[];
 let editedPosterFile=null,posterHistory=[],posterDraftFields=null,posterLogoImage=null,posterLayers=[],posterSelected=-1,posterDrag=null,posterPendingLayers=null;
-function previewCarouselMedia(){const files=Array.from(document.getElementById('pCarousel')?.files||[]);document.getElementById('carouselSelected').textContent=files.length+' images selected';if(files.length>=2&&files.length<=10){document.getElementById('pKind').value='carousel';document.getElementById('pMedia').value='';}}
+function previewCarouselMedia(){
+ const incoming=Array.from(document.getElementById('pCarousel')?.files||[]);
+ if(!incoming.length){const label=document.getElementById('carouselSelected');if(label)label.textContent='Android picker returned no files. Try Gallery / Files with multi-select enabled.';return}
+ pendingCarouselFiles=incoming;
+ if(incoming.length>10){pendingCarouselFiles=incoming.slice(0,10);toast('Carousel maximum is 10 images');}
+ document.getElementById('pKind').value='carousel';
+ document.getElementById('pMedia').value='';
+ renderCarouselSelected();
+}
+function moveCarouselImage(index,delta){
+ const to=index+delta;if(to<0||to>=pendingCarouselFiles.length)return;
+ [pendingCarouselFiles[index],pendingCarouselFiles[to]]=[pendingCarouselFiles[to],pendingCarouselFiles[index]];
+ renderCarouselSelected();
+}
+function removeCarouselImage(index){pendingCarouselFiles.splice(index,1);renderCarouselSelected();}
+function renderCarouselSelected(){
+ carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];
+ const label=document.getElementById('carouselSelected'),grid=document.getElementById('carouselPreviewGrid');
+ if(!label||!grid)return;
+ const n=pendingCarouselFiles.length;
+ label.textContent=n+' selected · '+(n<2?'Choose at least 2 images':n>10?'Maximum 10 images':'Drag-order alternative: use the arrows to arrange slides')+'. Files remain selected when reordered.';
+ grid.innerHTML='';
+ pendingCarouselFiles.forEach((file,i)=>{
+  if(!['image/jpeg','image/png'].includes(file.type))return;
+  const url=URL.createObjectURL(file);carouselPreviewUrls.push(url);
+  const tile=document.createElement('div');tile.className='carousel-tile';
+  const img=document.createElement('img');img.src=url;img.alt='Carousel image '+(i+1);tile.appendChild(img);
+  const order=document.createElement('span');order.className='tile-order';order.textContent=i===0?'Cover · 1':String(i+1);tile.appendChild(order);
+  const controls=document.createElement('div');controls.className='tile-controls';
+  [['←',-1],['→',1],['×',null]].forEach(([name,d])=>{
+   const b=document.createElement('button');b.type='button';b.textContent=name;b.setAttribute('aria-label',d===null?'Remove slide':d<0?'Move slide left':'Move slide right');
+   b.onclick=()=>d===null?removeCarouselImage(i):moveCarouselImage(i,d);controls.appendChild(b);
+  });
+  tile.appendChild(controls);grid.appendChild(tile);
+ });
+ if(n){const hero=document.getElementById('postLargePreview');if(hero&&carouselPreviewUrls[0]){hero.src=carouselPreviewUrls[0];hero.style.display='block';}}
+}
+
 function previewSelectedPostMedia(){const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');editedPosterFile=null;if(!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{preview.src=reader.result;preview.style.display='block'};reader.readAsDataURL(file)}
 async function posterImageBlob(){
  if(editedPosterFile)return editedPosterFile;
@@ -224,7 +262,7 @@ async function storePost(){
   let old=state.posts.find(x=>x.id===editing)||{},id=editing||uid();
   let accountTargets={};state.accounts.forEach(a=>{let destinations=placementsForAccount(a).map(x=>x[0]).filter(k=>document.getElementById('account_'+a.id+'_'+k)?.checked);if(destinations.length)accountTargets[a.id]=destinations});
   let post={...old,id,title,date,time,status,targets,accountTargets,caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
-  const carouselFiles=Array.from(document.getElementById('pCarousel')?.files||[]);
+  const carouselFiles=[...pendingCarouselFiles];
   if(carouselFiles.length){
     if(carouselFiles.length<2||carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select 2–10 JPG/PNG images');return}
     let ids=[];for(const f of carouselFiles){const id=uid().replace(/[^a-zA-Z0-9_-]/g,'');const bytes=new Uint8Array(await f.arrayBuffer());if(!await persistMedia(id,f.name,bytes)){ids.forEach(cleanupMedia);toast('Failed to store carousel image');return}ids.push(id)}
@@ -246,7 +284,7 @@ async function storePost(){
   if(editing)state.posts=state.posts.map(x=>x.id===editing?post:x);else state.posts.push(post);
   if(!save()){if(!editing)state.posts.pop();return}
   (old.mediaIds?.length?old.mediaIds:[old.mediaId]).filter(Boolean).forEach(id=>{if(!(post.mediaIds||[]).includes(id)&&post.mediaId!==id&&post.sourceMediaId!==id&&!state.posts.some(x=>x.id!==post.id&&(x.mediaId===id||(x.mediaIds||[]).includes(id)||x.sourceMediaId===id)))cleanupMedia(id)});
-  editedPosterFile=null;posterPendingLayers=null;closeModal();route('queue');toast('Post and selected destinations saved.');
+  editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];closeModal();route('queue');toast('Post and selected destinations saved.');
 }
 function setBulkMode(on){bulkMode=on;bulkSelected.clear();render()}
 function toggleBulk(id){if(bulkSelected.has(id))bulkSelected.delete(id);else bulkSelected.add(id);render()}

@@ -469,12 +469,37 @@ window.onPostFlowPublish=function(raw){
  }catch(e){toast('Unexpected publishing response');}
 };
 function publishTime(v,status){return v?new Date(v*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+' IST':(status==='published'?'Not recorded (older post)':'Not published yet')}
-function publishingHistory(id){const items=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===id);return items.length?'<div class="card"><h3>Publishing History</h3>'+items.map(j=>'<div class="item"><div class="body"><b>'+esc(j.account)+' · '+esc(j.placement)+'</b><small>Status: '+esc(j.status)+'</small><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small></div></div>').join('')+'</div>':''}
-function showPublishJobs(){
- const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+' · '+esc(j.status)+'</b><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at)+'</small><small>'+esc(j.error||'')+'</small></div></div>').join('');
- showModal({title:'Publishing Jobs',body:'<p class="sub">Server jobs. Scheduled and actual published times are separate.</p>'+(jobs||'<div class="empty">No server jobs yet</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});
+function publishingHistory(id){const items=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===id);return items.length?'<div class="card"><h3>Publishing History</h3>'+items.map(j=>'<div class="item"><div class="body"><b>'+esc(j.account)+' · '+esc(j.placement)+'</b><small>Status: '+esc(j.status)+'</small><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Error: '+esc(j.error)+'</small>':'')+'</div></div>').join('')+'</div>':''}
+
+function issueHelp(j){
+ const raw=String(j.error||j.last_error||'');
+ const lower=raw.toLowerCase(),code=String(j.error_code||'');
+ if(!raw&&j.status!=='published'&&j.status!=='scheduled')return {cause:'Server has not supplied an error detail yet.',fix:'Refresh the job and check WordPress server logs if the status remains unchanged.'};
+ if(/token|oauth|expired|190|access.*invalid/.test(lower))return {cause:'Account authorization may have expired or been revoked.',fix:'Reconnect this account through WordPress PostFlow Connect, then verify the current server job before retrying.'};
+ if(/permission|scope|(#200)|(#10)|not authorized/.test(lower))return {cause:'The account does not appear to have the required publishing permission.',fix:'Check Meta App permissions and the connected Page/Instagram role; reconnect the account afterward.'};
+ if(/format|aspect|resolution|image|media|video|codec|unsupported|400/.test(lower))return {cause:'The selected media may not meet the platform publishing requirements.',fix:'Review image/video format, size and aspect ratio; create a corrected job only after checking whether the original was published.'};
+ if(/rate limit|429|quota|too many/.test(lower))return {cause:'The platform is limiting publishing requests.',fix:'Wait and retry only after the server confirms the previous attempt failed.'};
+ if(/cron|schedule|timeout|network|connection|500|502|503/.test(lower))return {cause:'The server scheduler or API connection may be unavailable.',fix:'Check WordPress scheduled tasks and hosting logs. Do not resubmit until you confirm this job did not publish.'};
+ return {cause:raw?'The server or platform rejected this publishing attempt.':'The publishing status is pending confirmation.',fix:'Review the technical error below and check the account on the platform before retrying.'};
 }
-function showJobDetail(id){const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j)return;showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: '+esc(j.status)+'</p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Actual Published Time: '+publishTime(j.published_at)+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p><p>'+esc(j.error||'')+'</p></div>'+btn('Back','showPublishJobs()','full')});}
+function jobStatusClass(j){return ['failed','attention','error','upload_failed'].includes(j.status)?'red':j.status==='published'?'green':''}
+function jobErrorPanel(j){
+ const e=String(j.error||j.last_error||'').slice(0,1200);
+ if(!['failed','attention','error','upload_failed'].includes(j.status)&&!e)return '';
+ const guide=issueHelp(j);
+ return '<div class="detail-error"><strong>Why was this post not published?</strong><p>'+esc(guide.cause)+'</p><p><b>What to do:</b> '+esc(guide.fix)+'</p><div class="line"></div><small>Platform / server error: '+esc(e||'No detailed error was provided by the server.')+'</small><small> · Code: '+esc(j.error_code||'Not provided')+'</small></div>';
+}
+function showPublishJobs(){
+ const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Issue: '+esc(String(j.error).slice(0,110))+'</small>':'')+'</div><span class="rowbtn">Details ›</span></div>').join('');
+ showModal({title:'Publishing Center',body:'<p class="sub">Live server results. Publishing and local reminders are separate.</p>'+(jobs||'<div class="empty">No server jobs yet</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});
+}
+function showJobDetail(id){
+ const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j)return;
+ const actual=j.published_at?publishTime(j.published_at,j.status):publishTime(null,j.status);
+ const attempted=j.attempted_at||j.last_attempt_at||j.last_attempt||null;
+ const progress='<div class="card"><h3>Publishing Timeline</h3><p>① Scheduled · '+publishTime(j.scheduled_at)+'</p><p>② Attempted · '+publishTime(attempted)+'</p><p>③ '+(j.status==='published'?'Published':'Current status: '+esc(j.status))+' · '+actual+'</p></div>';
+ showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+'<div class="note">For safe retries, verify whether the post is already live on Facebook or Instagram. A failed status can sometimes mean the server missed a confirmation.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
+}
 
 function openWordPressPair(){if(!window.PostFlowNative?.pairWordPress){toast('Android native app update required');return}showModal({title:'Pair WordPress',body:`<div class="note">Website: https://graphicanest.in. Generate your private pairing key in WordPress Settings → PostFlow Connect. Never share it in chat.</div><div class="field"><label>Private Pairing Key</label><input id="wpPairKey" type="password" autocomplete="off" placeholder="Paste pairing key"></div>${btn('Save Key & Sync','saveWordPressPair()','full')}`})}
 function saveWordPressPair(){const field=document.getElementById('wpPairKey');const key=field?.value.trim()||'';if(!/^[A-Za-z0-9_-]{32,128}$/.test(key)){toast('Invalid pairing key format');return}field.value='';closeModal();state.wpSyncStatus='Connecting…';render();window.PostFlowNative.pairWordPress(key)}

@@ -153,8 +153,8 @@ function editPost(id){
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
   ${acct}</div><div class="composer-stage" data-stage="5" hidden><div class="field"><label>Publishing State</label><select id="pStatus"><option value="scheduled" ${d.status==='scheduled'?'selected':''}>Scheduled / Reminder armed</option><option value="draft" ${d.status==='draft'?'selected':''}>Draft</option><option value="paused" ${d.status==='paused'?'selected':''}>Paused — no reminders</option><option value="manually_posted" ${d.status==='manually_posted'?'selected':''}>Marked shared manually</option></select></div>
-  <div class="actions">${btn('Save Post','storePost()','')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
-  <div class="line"></div><div class="note">Local reminders and server publishing are separate. To send this saved media to WordPress, tap Publish via WordPress, choose accounts and confirm. Requires PostFlow Connect v1.7, Meta publishing permissions and working server cron. WhatsApp always requires manual send.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
+  <div class="card"><b>Publish to WordPress</b><p class="sub">Choose where this post should publish. The Schedule Post button saves media and sends it to WordPress immediately.</p>${(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram').map((a,i)=>'<div class="field"><label>'+esc(a.name)+' ('+esc(a.platform)+')</label><select class="direct-destination" data-index="'+i+'"><option value="">Do not publish here</option>'+((d.kind==='carousel'||pendingCarouselFiles.length>1)?'<option value="carousel">Carousel Feed</option>':'<option value="feed">Feed Post</option><option value="story">Story</option><option value="reel">Reel</option>')+'</select></div>').join('')||'<div class="note">No synced publishing accounts. Connect WordPress first.</div>'}</div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
+  <div class="line"></div><div class="note">Schedule Post submits to WordPress directly. The post is only confirmed scheduled after WordPress accepts the job. Save as Draft does not publish anything.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
   const steps=document.querySelectorAll('#overlay .composer-stage');
   if(steps.length===5){steps[0].dataset.stage='2';steps[1].dataset.stage='1';steps[0].parentNode.insertBefore(steps[1],steps[0]);}
   setComposerStage(1);updateRatioPreview();
@@ -280,15 +280,25 @@ function posterLoadLogo(){const f=document.getElementById('posterLogo')?.files?.
 function posterApplyLogo(){if(!posterLogoImage){toast('Choose logo first');return}posterPushUndo();const c=posterWork,ctx=c.getContext('2d'),w=Number(document.getElementById('posterLogoSize').value)/100*c.width,h=w*posterLogoImage.height/posterLogoImage.width,pos=document.getElementById('posterLogoPos').value,pad=c.width*.04;const x=pos.endsWith('r')?c.width-w-pad:pad,y=pos.startsWith('t')?pad:c.height-h-pad;ctx.drawImage(posterLogoImage,x,y,w,h);showPosterCanvas()}
 function posterCancel(){closeModal();editPost(editing);posterRestoreForm(posterDraftFields);posterDraftFields=null}
 function posterSaveCopy(){const merged=document.createElement('canvas');merged.width=posterWork.width;merged.height=posterWork.height;const ctx=merged.getContext('2d');ctx.drawImage(posterWork,0,0);const sel=posterSelected;posterSelected=-1;posterDrawLayers(ctx);posterSelected=sel;posterPendingLayers=JSON.parse(JSON.stringify(posterLayers));merged.toBlob(blob=>{if(!blob){toast('Image export failed');return}editedPosterFile=new File([blob],'postflow-edited-'+Date.now()+'.jpg',{type:'image/jpeg'});const data=merged.toDataURL('image/jpeg',.85);closeModal();editPost(editing);posterRestoreForm(posterDraftFields);posterDraftFields=null;const preview=document.getElementById('postLargePreview');if(preview){preview.src=data;preview.style.display='block'}toast('Edited copy ready. Tap Save Post to attach it.')},'image/jpeg',.9)}
-async function storePost(){
+async function storePost(scheduleNow=false){
+  const selectedWP=scheduleNow?Array.from(document.querySelectorAll('.direct-destination')).filter(x=>x.value).map(x=>({a:(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram')[Number(x.dataset.index)],placement:x.value})).filter(x=>x.a):[];
+  if(scheduleNow){
+    if(!hasWordPressPair())return showModal({title:'WordPress Not Connected',body:'<div class="detail-error">Connect WordPress before scheduling. Your unsaved post remains in the composer if you go back.</div>'+btn('Connect WordPress','openWordPressPair()','full')+btn('Back to Post','closeModal()','secondary full')});
+    if(!selectedWP.length)return toast('Choose a WordPress publishing account before scheduling.');
+    const d=document.getElementById('pDate')?.value,t=document.getElementById('pTime')?.value;
+    const at=Date.parse(d+'T'+t+':00+05:30')/1000;
+    if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120)return toast('Choose a future schedule at least 2 minutes ahead (IST).');
+    if(!window.PostFlowNative?.queueWordPressPost)return toast('Android publishing support unavailable.');
+  }
+
   const title=document.getElementById('pTitle').value.trim(),date=document.getElementById('pDate').value,time=document.getElementById('pTime').value,status=document.getElementById('pStatus').value;
   const targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('tar_'+k).checked);
   if(!title||!date||!time){toast('Title, date and time required');return}
   if(editing&&hasActiveServerJobs(editing)){toast('Server job already submitted. Editing here will not update WordPress, so edit is blocked.');return}
-  if(status==='scheduled'&&!targets.length){toast('Select destinations or save as Draft');return}
+  if(!scheduleNow&&status==='scheduled'&&!targets.length){toast('Select destinations or save as Draft');return}
   let old=state.posts.find(x=>x.id===editing)||{},id=editing||uid();
   let accountTargets={};state.accounts.forEach(a=>{let destinations=placementsForAccount(a).map(x=>x[0]).filter(k=>document.getElementById('account_'+a.id+'_'+k)?.checked);if(destinations.length)accountTargets[a.id]=destinations});
-  let post={...old,id,title,date,time,status,targets,accountTargets,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
+  let post={...old,id,title,date,time,status:scheduleNow?'uploading': 'draft',targets,accountTargets,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
   const carouselFiles=[...pendingCarouselFiles];
   if(carouselFiles.length){
     if(carouselFiles.length<2||carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select 2–10 JPG/PNG images');return}
@@ -325,7 +335,8 @@ async function storePost(){
   if(editing)state.posts=state.posts.map(x=>x.id===editing?post:x);else state.posts.push(post);
   if(!save()){if(!editing)state.posts.pop();return}
   (old.mediaIds?.length?old.mediaIds:[old.mediaId]).filter(Boolean).forEach(id=>{if(!(post.mediaIds||[]).includes(id)&&post.mediaId!==id&&post.sourceMediaId!==id&&!state.posts.some(x=>x.id!==post.id&&(x.mediaId===id||(x.mediaIds||[]).includes(id)||x.sourceMediaId===id)))cleanupMedia(id)});
-  editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];closeModal();route('queue');toast('Post and selected destinations saved.');
+  editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];closeModal();route('queue');
+  if(scheduleNow){submitDirectWordPress(post,selectedWP);toast('Uploading to WordPress. Check Publishing Center for confirmation.');}else toast('Draft saved locally.');
 }
 function setBulkMode(on){bulkMode=on;bulkSelected.clear();render()}
 function toggleBulk(id){if(bulkSelected.has(id))bulkSelected.delete(id);else bulkSelected.add(id);render()}
@@ -533,6 +544,27 @@ function setPublishTimeTenMinutes(){
  if(t)t.value=ist.slice(11,16);
  const err=document.getElementById('publishTimeError');if(err)err.style.display='none';
 }
+function submitDirectWordPress(p,selected){
+ const at=Math.floor(Date.parse(p.date+'T'+p.time+':00+05:30')/1000);
+ if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120)return toast('Schedule expired. Edit date/time and try again.');
+ if(Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&['uploading','scheduled','processing','published'].includes(j.status)))return toast('Publishing job already exists. Check status first.');
+ state.wpPendingJobs=state.wpPendingJobs||{};
+ for(const {a,placement} of selected){
+  const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');
+  state.wpPendingJobs[key]={title:p.title,postId:p.id,account:a.name,placement,status:'uploading',scheduled_at:at};
+  try{
+   if(placement==='carousel'){
+    if(!p.mediaIds||p.mediaIds.length<2)throw Error('Carousel needs 2 or more images.');
+    if(!window.PostFlowNative?.queueWordPressCarousel)throw Error('Carousel upload not supported in this APK.');
+    PostFlowNative.queueWordPressCarousel(JSON.stringify(p.mediaIds),key,a.platform,a.external_id,p.caption||'',at);
+   }else{
+    if(!p.mediaId)throw Error('Image or video is missing.');
+    PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
+   }
+  }catch(e){state.wpPendingJobs[key].status='upload_failed';state.wpPendingJobs[key].error=e.message||'Upload could not start';}
+ }
+ save();
+}
 function submitPublishPost(id){
  const p=state.posts.find(x=>x.id===id);if(!p)return;
  const date=document.getElementById('publishDate')?.value||p.date;
@@ -568,7 +600,7 @@ window.onPostFlowPublish=function(raw){
  try{
   const r=JSON.parse(raw);
   if(r.mutation){if(r.ok&&r.job){state.wpServerJobs=(state.wpServerJobs||[]).map(j=>Number(j.id)===Number(r.job_id)?r.job:j);for(const local of Object.values(state.wpPendingJobs||{})){if(Number(local.serverId)===Number(r.job_id)){local.status=r.job.status;local.scheduled_at=r.job.scheduled_at;local.error=r.job.error||'';}}save();toast(r.mutation==='DELETE'?'Scheduled job cancelled on WordPress':'WordPress job updated');showJobDetail(Number(r.job_id));}else{toast(r.error||'Update was rejected');showJobDetail(Number(r.job_id));}return;}
-  if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';}save();toast(r.ok?'Job accepted by WordPress':r.error||'Upload failed');if(page==='accounts')render();}
+  if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';if(j.postId){const p=state.posts.find(x=>x.id===j.postId);if(p){const others=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===j.postId);p.status=others.every(x=>x.status==='upload_failed')?'draft':others.some(x=>x.status==='uploading')?'uploading':'scheduled';}}}save();toast(r.ok?'WordPress accepted the publishing job':r.error||'Upload failed');if(page==='accounts')render();}
   else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}save();showPublishJobs();}
   else if(r.error)toast(r.error);
  }catch(e){toast('Unexpected publishing response');}
@@ -632,6 +664,13 @@ function showJobDetail(id){
  showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+actions+'<div class="note">Verify the live platform post before retrying. Completed jobs cannot be edited.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
 }
 
+function hasWordPressPair(){try{return !!window.PostFlowNative?.isWordPressPaired?.()}catch(e){return false}}
+let welcomePairDismissed=false;
+function showWordPressWelcome(){
+ if(welcomePairDismissed||hasWordPressPair()||document.getElementById('overlay')?.innerHTML)return;
+ welcomePairDismissed=true;
+ showModal({title:'Connect WordPress',body:'<div class="note"><b>Connect graphicanest.in</b><p>Connect PostFlow to WordPress to schedule Instagram and Facebook publishing. You can still create drafts and plan content offline.</p></div>'+btn('Connect Now','openWordPressPair()','full')+btn('Later','closeModal()','secondary full')});
+}
 function openWordPressPair(){if(!window.PostFlowNative?.pairWordPress){toast('Android native app update required');return}showModal({title:'Pair WordPress',body:`<div class="note">Website: https://graphicanest.in. Generate your private pairing key in WordPress Settings → PostFlow Connect. Never share it in chat.</div><div class="field"><label>Private Pairing Key</label><input id="wpPairKey" type="password" autocomplete="off" placeholder="Paste pairing key"></div>${btn('Save Key & Sync','saveWordPressPair()','full')}`})}
 function saveWordPressPair(){const field=document.getElementById('wpPairKey');const key=field?.value.trim()||'';if(!/^[A-Za-z0-9_-]{32,128}$/.test(key)){toast('Invalid pairing key format');return}field.value='';closeModal();state.wpSyncStatus='Connecting…';render();window.PostFlowNative.pairWordPress(key)}
 function syncWordPressAccounts(){if(!window.PostFlowNative?.syncWordPressAccounts){toast('Android native app update required');return}state.wpSyncStatus='Syncing…';render();window.PostFlowNative.syncWordPressAccounts()}
@@ -646,5 +685,5 @@ function exportJsonBackup(){let blob=new Blob([JSON.stringify({version:3,exporte
 function importBackup(){showModal({title:'Restore JSON Backup',body:`<div class="note">Restoring replaces current posts/events. JSON file does NOT contain original media.</div><div class="field"><input type="file" id="backupFile" accept=".json,application/json"></div>${btn('Restore JSON','restoreBackup()','full')}`})}
 async function restoreBackup(){let f=document.getElementById('backupFile').files[0];if(!f)return;if(!confirm('Replace all existing local data?'))return;try{let a=JSON.parse(await f.text());if(!a.state||!Array.isArray(a.state.posts)||!Array.isArray(a.state.events))throw Error('Invalid backup');state={...JSON.parse(JSON.stringify(defaultStore)),...a.state};save();closeModal();route('home');toast('Metadata restored')}catch(e){toast('Invalid backup file')}}
 window.applyNativeRestoredState=function(json){try{let restored=JSON.parse(json);if(!Array.isArray(restored.posts)||!Array.isArray(restored.events))throw Error('Invalid data');state={...JSON.parse(JSON.stringify(defaultStore)),...restored};save();closeModal();route('home');toast('Posts, events and full media backup restored')}catch(e){toast('Restore display error')}};
-render();if(window.PostFlowNative&&PostFlowNative.syncState){try{PostFlowNative.syncState(JSON.stringify(state))}catch(e){}}setTimeout(()=>{let upcoming=nextEvents().filter(e=>e.viewDate===dateLocal());if(upcoming.length&&state.settings.notifications)toast('Today: '+upcoming.map(e=>e.title).slice(0,2).join(', '));else notifyDue()},700);
+render();if(window.PostFlowNative&&PostFlowNative.syncState){try{PostFlowNative.syncState(JSON.stringify(state))}catch(e){}}setTimeout(showWordPressWelcome,450);setTimeout(()=>{let upcoming=nextEvents().filter(e=>e.viewDate===dateLocal());if(upcoming.length&&state.settings.notifications)toast('Today: '+upcoming.map(e=>e.title).slice(0,2).join(', '));else notifyDue()},700);
 </script></body></html>

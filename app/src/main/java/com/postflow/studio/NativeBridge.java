@@ -125,6 +125,64 @@ public final class NativeBridge {
     private static void writeField(java.io.OutputStream out,String boundary,String name,String value)throws IOException{
         out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\""+name+"\"\r\n\r\n"+value+"\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
     }
+
+    @JavascriptInterface public void queueWordPressCarousel(String idsJson,String clientId,String platform,String externalId,String caption,long scheduledAt){
+        new Thread(()->{
+            java.net.HttpURLConnection c=null;
+            try{
+                org.json.JSONArray ids=new org.json.JSONArray(idsJson);
+                if(ids.length()<2||ids.length()>10||!clientId.matches("[A-Za-z0-9_-]{12,100}")
+                  ||!java.util.Arrays.asList("facebook","instagram").contains(platform)
+                  ||!externalId.matches("[0-9]{2,40}"))throw new IOException("Invalid carousel details");
+                java.util.List<File> files=new java.util.ArrayList<>();
+                java.util.List<String> mimes=new java.util.ArrayList<>();
+                long total=0;
+                for(int i=0;i<ids.length();i++){
+                    String mediaId=ids.getString(i);
+                    if(!MediaContentProvider.valid(mediaId))throw new IOException("Invalid image ID");
+                    File file=MediaContentProvider.mediaFile(activity,mediaId);
+                    if(!file.isFile()||file.length()<1)throw new IOException("Missing image");
+                    total+=file.length();if(total>140L*1024*1024)throw new IOException("Carousel too large");
+                    String name=activity.getSharedPreferences("postflow_media",0).getString(mediaId,"").toLowerCase(java.util.Locale.ROOT);
+                    if(!name.endsWith(".jpg")&&!name.endsWith(".jpeg")&&!name.endsWith(".png"))throw new IOException("Carousel needs JPEG or PNG");
+                    files.add(file);mimes.add(name.endsWith(".png")?"image/png":"image/jpeg");
+                }
+                String boundary="PFC"+java.util.UUID.randomUUID().toString().replace("-","");
+                c=(java.net.HttpURLConnection)new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs").openConnection();
+                c.setRequestMethod("POST");c.setConnectTimeout(16000);c.setReadTimeout(60000);c.setDoOutput(true);c.setChunkedStreamingMode(65536);
+                c.setRequestProperty("Authorization","Bearer "+wordpressKey());
+                c.setRequestProperty("Content-Type","multipart/form-data; boundary="+boundary);
+                try(java.io.OutputStream out=c.getOutputStream()){
+                    writeField(out,boundary,"platform",platform);writeField(out,boundary,"external_id",externalId);
+                    writeField(out,boundary,"placement","carousel");writeField(out,boundary,"caption",caption==null?"":caption);
+                    writeField(out,boundary,"scheduled_at",Long.toString(scheduledAt));writeField(out,boundary,"client_job_id",clientId);
+                    writeField(out,boundary,"media_count",Integer.toString(files.size()));
+                    for(int i=0;i<files.size();i++){
+                        String mime=mimes.get(i);
+                        out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\"media_"+i+"\"; filename=\"image"+i+(mime.equals("image/png")?".png":".jpg")+"\"\r\nContent-Type: "+mime+"\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        try(java.io.InputStream in=new java.io.FileInputStream(files.get(i))){
+                            byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
+                        }
+                        out.write("\r\n".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    }
+                    out.write(("--"+boundary+"--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int status=c.getResponseCode();
+                String response="";
+                try(java.io.InputStream in=(status<400?c.getInputStream():c.getErrorStream())){
+                    if(in!=null){java.io.ByteArrayOutputStream out=new java.io.ByteArrayOutputStream();byte[] b=new byte[2048];int n;while((n=in.read(b))!=-1&&out.size()<32000)out.write(b,0,n);response=out.toString("UTF-8");}
+                }
+                org.json.JSONObject result=new org.json.JSONObject();
+                result.put("client_id",clientId);result.put("http_status",status);result.put("ok",status==200||status==201);
+                if(status==200||status==201){result.put("job",new org.json.JSONObject(response).optJSONObject("job"));}
+                else result.put("error","Carousel upload rejected (HTTP "+status+")");
+                sendPublishResult(result.toString());
+            }catch(Exception e){
+                try{org.json.JSONObject o=new org.json.JSONObject();o.put("client_id",clientId);o.put("ok",false);o.put("error","Carousel upload failed. Check images or connection.");sendPublishResult(o.toString());}catch(Exception ignored){}
+            }finally{if(c!=null)c.disconnect();}
+        }).start();
+    }
+
     @JavascriptInterface public void getWordPressJobs(){
         new Thread(()->{
             java.net.HttpURLConnection c=null;

@@ -657,7 +657,6 @@ function csvRows(text){
  return out;
 }
 function parseManifestDate(value){if(!value)return '';let d=guessDate(value);return d||(/^\d{4}-\d{2}-\d{2}$/.test(value)?value:'')}
-async 
 async function findZipMetadataTxt(zip){
  const textFiles=Object.values(zip.files).filter(e=>!e.dir&&/\.txt$/i.test(e.name)&&!e.name.startsWith('__MACOSX/'));
  if(textFiles.length>15)throw Error('Too many TXT files in ZIP');

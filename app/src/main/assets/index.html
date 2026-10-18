@@ -571,7 +571,7 @@ function regenerateZipCaptions(){
  allowed.forEach(p=>{p.caption=zipCaption(p.title,p.category||pickCategory(p.mediaName||p.title),p.mediaName||p.title);p.captionApproved=false;});
  save();route('library');toast('Regenerated captions for '+allowed.length+' ZIP posts. Review before publishing.');
 }
-function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one captions.txt with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. Auto mode submits eligible posts to WordPress when paired; otherwise they remain drafts. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
+function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one captions.txt with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. A review screen is shown before any post is scheduled. Auto mode submits only confirmed eligible posts to WordPress. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
 async function thumbnail(bytes,mime){return new Promise(resolve=>{if(!mime.startsWith('image/'))return resolve('');let blob=new Blob([bytes],{type:mime}),u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{let c=document.createElement('canvas'),scale=Math.min(1,160/Math.max(im.width,im.height));c.width=Math.round(im.width*scale);c.height=Math.round(im.height*scale);let ctx=c.getContext('2d');ctx.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);resolve(c.toDataURL('image/jpeg',.58))};im.onerror=()=>{URL.revokeObjectURL(u);resolve('')};im.src=u})}
 function safeFileName(name){return String(name||'media').split('/').pop().slice(0,160)}
 function base64Chunk(bytes){let result='';for(let i=0;i<bytes.length;i++)result+=String.fromCharCode(bytes[i]);return btoa(result)}
@@ -657,12 +657,86 @@ function csvRows(text){
  return out;
 }
 function parseManifestDate(value){if(!value)return '';let d=guessDate(value);return d||(/^\d{4}-\d{2}-\d{2}$/.test(value)?value:'')}
+async 
+let zipReviewSession=null;
 async function processZip(){
- const file=document.getElementById('zipInput').files[0],mode=document.getElementById('zipMode').value,targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('zip_'+k).checked);
+ const file=document.getElementById('zipInput')?.files?.[0];
+ if(!file)return toast('Choose ZIP file');
+ if(file.size>200*1024*1024)return toast('ZIP exceeds 200MB');
+ try{
+  const mode=document.getElementById('zipMode')?.value||'draft';
+  const targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('zip_'+k)?.checked);
+  const zip=await JSZip.loadAsync(file,{checkCRC32:true});
+  const entries=Object.values(zip.files).filter(e=>!e.dir&&/\.(png|jpe?g|webp|mp4|mov)$/i.test(e.name)&&!e.name.startsWith('__MACOSX/'));
+  if(!entries.length||entries.length>250)throw Error('Expected 1–250 media files');
+  const txt=Object.values(zip.files).filter(e=>!e.dir&&/(^|\/)captions\.txt$/i.test(e.name));
+  if(txt.length>1)throw Error('Only one captions.txt is supported');
+  const csv=Object.values(zip.files).find(e=>!e.dir&&/(^|\/)manifest\.csv$/i.test(e.name));
+  const manifest=csv?csvRows(await csv.async('text')):{};
+  const raw=txt.length?await txt[0].async('text'):'';
+  const structured=/^\s*\[POST\]\s*$/im.test(raw)?parseFestivalPostTxt(raw):null;
+  const legacy=txt.length&&!structured?zipCaptionTextMap(raw):null;
+  const counts=new Map();
+  entries.forEach(e=>counts.set(safeFileName(e.name),(counts.get(safeFileName(e.name))||0)+1));
+  const rows=entries.map(e=>{
+    const meta=manifest[e.name]||manifest[safeFileName(e.name)]||{};
+    const matched=matchFestivalPostTxt(e.name,structured);
+    const plain=zipTextCaptionFor(e.name,legacy);
+    const r=matched.record,problems=[];
+    if(structured&&matched.warning)problems.push(matched.warning);
+    if(structured&&counts.get(safeFileName(e.name))>1&&!structured.byFilename.has(e.name))problems.push('Ambiguous filename; use exact ZIP path in TXT');
+    if(structured?.duplicates.has(r?.filename))problems.push('Duplicate filename in TXT');
+    const title=r?.title||meta.title||titleFromName(e.name);
+    const date=r?.date||parseManifestDate(meta.date)||guessDate(e.name)||'';
+    const time=r?.time||meta.time||state.settings.time;
+    if(!validFestivalDateTime(date,time))problems.push('Invalid date or time');
+    const kind=String(r?.type||'post').toLowerCase();
+    if(!['post','story'].includes(kind))problems.push('Unsupported post type');
+    const platforms=String(r?.platform||'instagram').toLowerCase().split(/[,|;]/).map(x=>x.trim()).filter(Boolean);
+    if(platforms.some(x=>!['instagram','facebook'].includes(x)))problems.push('Unsupported platform');
+    return {path:e.name,title,date,time,type:kind,platforms,caption:r?.caption??plain.caption??meta.caption??makeCaption(title,pickCategory(title)),greeting:r?.greeting||'',problems};
+  });
+  if(structured)for(const key of structured.byFilename.keys())if(!entries.some(e=>e.name===key||safeFileName(e.name)===safeFileName(key)))rows[0].problems.push('TXT references missing media: '+key);
+  zipReviewSession={file,mode,targets,rows};
+  showZipReview();
+ }catch(e){toast('ZIP parse failed: '+String(e.message).slice(0,90))}
+}
+function showZipReview(){
+ const z=zipReviewSession;if(!z)return;
+ showModal({title:'Review ZIP Before Scheduling',body:
+ '<div class="note">Nothing is submitted until you confirm. Edit the caption, greeting, Story/Post, platform, date and time for each image. Unsafe filename matches remain drafts.</div>'+
+ '<p class="sub">'+z.rows.length+' media items · '+z.rows.reduce((a,r)=>a+r.problems.length,0)+' warnings</p>'+
+ z.rows.map((r,i)=>'<div class="card" style="margin:12px 0"><b>'+esc(r.path)+'</b>'+
+ (r.problems.length?'<div class="detail-error">'+r.problems.map(esc).join('; ')+'</div>':'')+
+ '<div class="field"><label>Title</label><input id="zrtitle'+i+'" value="'+esc(r.title)+'"></div>'+
+ '<div class="field"><label>Type</label><select id="zrtype'+i+'"><option value="post" '+(r.type==='post'?'selected':'')+'>Feed Post</option><option value="story" '+(r.type==='story'?'selected':'')+'>Story</option></select></div>'+
+ '<div class="field"><label>Platform</label><select id="zrplatform'+i+'"><option value="instagram" '+(r.platforms.join(',')==='instagram'?'selected':'')+'>Instagram</option><option value="facebook" '+(r.platforms.join(',')==='facebook'?'selected':'')+'>Facebook</option><option value="instagram,facebook" '+(r.platforms.length===2?'selected':'')+'>Both</option></select></div>'+
+ '<div class="layout-actions"><div class="field"><label>Date</label><input id="zrdate'+i+'" type="date" value="'+esc(r.date)+'"></div><div class="field"><label>Time (IST)</label><input id="zrtime'+i+'" type="time" value="'+esc(r.time)+'"></div></div>'+
+ '<div class="field"><label>Greeting</label><textarea id="zrgreeting'+i+'">'+esc(r.greeting)+'</textarea></div>'+
+ '<div class="field"><label>Caption</label><textarea id="zrcaption'+i+'" rows="4">'+esc(r.caption)+'</textarea></div></div>').join('')+
+ btn(z.mode==='auto'?'Confirm & Schedule Valid Posts':'Confirm Draft Import','confirmZipReview()','full')+
+ btn('Cancel','cancelZipReview()','secondary full')});
+}
+function cancelZipReview(){zipReviewSession=null;closeModal();toast('Import cancelled; nothing scheduled')}
+function confirmZipReview(){
+ const z=zipReviewSession;if(!z)return;
+ z.rows=z.rows.map((r,i)=>{
+  const get=n=>document.getElementById('zr'+n+i)?.value??'';
+  const date=get('date'),time=get('time'),type=get('type'),platforms=get('platform').split(',');
+  const problems=r.problems.filter(v=>/missing media|TXT record missing|Duplicate|Ambiguous|No safe/i.test(v));
+  if(!validFestivalDateTime(date,time))problems.push('Invalid date/time');
+  return {...r,title:get('title').trim(),date,time,type,platforms,caption:get('caption'),greeting:get('greeting'),problems};
+ });
+ z.confirmed=true;importZipAfterReview();
+}
+
+async function importZipAfterReview(){
+ const session=zipReviewSession;if(!session?.confirmed)return toast('Review and confirm ZIP first');
+ const {file,mode,targets}=session;const reviewMap=new Map(session.rows.map(r=>[r.path,r]));
  if(!file){toast('Choose ZIP file');return}
  if(file.size>200*1024*1024){toast('ZIP limit 200 MB');return}
  if(!window.JSZip){toast('ZIP library missing');return}
- const control=document.querySelector('#overlay .btn.full');if(control){control.disabled=true;control.textContent='Importing…'}
+ 
  let added=0,duplicates=0,review=0,skipped=0;
  try{
    let zip=await JSZip.loadAsync(file,{checkCRC32:true});
@@ -694,28 +768,30 @@ async function processZip(){
      if(festivalMap&&nameCounts.get(safeFileName(f.name))>1&&!festivalMap.byFilename.has(f.name)){
        captionWarnings.push('Duplicate basename needs exact path in TXT: '+safeFileName(f.name));rec=null;
      }
-     const mappedTargets=festivalPostTargets(rec,targets);if(mappedTargets.warning)captionWarnings.push(safeFileName(f.name)+': '+mappedTargets.warning);
-     let date=rec?.date||parseManifestDate(meta.date)||guessDate(safeFileName(f.name))||guessDate(f.name),category=meta.category||pickCategory(rec?.title||f.name);
-     let title=String(rec?.title||meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);
+     const approved=reviewMap.get(f.name);
+     const reviewedRec=approved&&approved.problems.length===0?{...approved,filename:f.name,platform:approved.platforms.join(',')}:null;
+     const mappedTargets=festivalPostTargets(reviewedRec,targets);if(mappedTargets.warning)captionWarnings.push(safeFileName(f.name)+': '+mappedTargets.warning);
+     let date=approved?.date||rec?.date||parseManifestDate(meta.date)||guessDate(safeFileName(f.name))||guessDate(f.name),category=meta.category||pickCategory(approved?.title||rec?.title||f.name);
+     let title=String(approved?.title||rec?.title||meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);
      let mime=video?'video/mp4':/\.png$/i.test(f.name)?'image/png':/\.webp$/i.test(f.name)?'image/webp':'image/jpeg';
      let mediaId=uid(),written=await persistMedia(mediaId,safeFileName(f.name),bytes);
      if(!written){skipped++;continue}
      let thumb=video?'':await thumbnail(bytes,mime);
-     let time=rec?.time||( /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(meta.time||'')?meta.time:state.settings.time);
-     let selected=rec?mappedTargets.targets:(meta.destinations||meta.targets)?String(meta.destinations||meta.targets).split(/[|;]/).map(t=>t.trim()).filter(t=>DEST.some(d=>d[0]===t)):targets;
+     let time=approved?.time||rec?.time||( /^(?:[01]\d|2[0-3]):[0-5]\d$/.test(meta.time||'')?meta.time:state.settings.time);
+     let selected=approved?mappedTargets.targets:rec?mappedTargets.targets:(meta.destinations||meta.targets)?String(meta.destinations||meta.targets).split(/[|;]/).map(t=>t.trim()).filter(t=>DEST.some(d=>d[0]===t)):targets;
      const validDate=validFestivalDateTime(date||'',time);
      if(rec&&!validDate)captionWarnings.push('Invalid date/time: '+safeFileName(f.name));
      const future=validDate&&Date.parse(date+'T'+time+':00+05:30')>=Date.now()+120000;
-     const hasTxtRecord=!festivalMap||!!rec;
-     let shouldSchedule=mode==='auto'&&future&&hasTxtRecord&&(!rec||!mappedTargets.warning)&&category!=='birthday'&&selected.length>0;
+     const hasTxtRecord=!!reviewedRec;
+     let shouldSchedule=mode==='auto'&&future&&hasTxtRecord&&!mappedTargets.warning&&selected.length>0;
      if(shouldSchedule&&!rec){while(times.has(date+'|'+time)){
        let [h,m]=time.split(':').map(Number),newMin=h*60+m+15;
        if(newMin>=1440){shouldSchedule=false;break}
        time=String(Math.floor(newMin/60)).padStart(2,'0')+':'+String(newMin%60).padStart(2,'0');
      }if(shouldSchedule)times.add(date+'|'+time)}
      if(!shouldSchedule)review++;
-     const captionText=rec?.caption||matched.caption||meta.caption;
-     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(rec?.greeting||''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:rec?.type||'post'};
+     const captionText=approved?.caption??rec?.caption??matched.caption??meta.caption;
+     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(approved?.greeting??rec?.greeting??''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:approved?.type||rec?.type||'post'};
      state.posts.push(post);
      if(shouldSchedule)toSubmit.push(post);
      added++;
@@ -735,9 +811,9 @@ async function processZip(){
      }
    }
    state.imports.unshift({id:uid(),name:file.name,imported:new Date().toLocaleDateString('en-IN'),added,duplicates,skipped,review,submitted:queued});
-   state.lastZipCaptionWarnings=captionWarnings.slice(0,15);save();closeModal();route('library');toast(`Imported ${added}; submitted ${queued} to WordPress (awaiting acceptance). ${captionWarnings.length} warning(s).`);
+   state.lastZipCaptionWarnings=captionWarnings.slice(0,15);zipReviewSession=null;save();closeModal();route('library');toast(`Imported ${added}; submitted ${queued} to WordPress (awaiting acceptance). ${captionWarnings.length} warning(s).`);
  }catch(e){toast('Import failed: '+String(e.message).slice(0,95));console.error(e)}
- finally{if(control){control.disabled=false;control.textContent='Import and Process ZIP'}}
+ finally{zipReviewSession=null;}
 }
 function saveSettings(){let t=document.getElementById('prefTime').value;if(!t)return;
  state.settings.time=t;state.settings.theme=document.getElementById('prefTheme')?.value||'system';setTheme(state.settings.theme,false);state.settings.notifications=document.getElementById('prefNote').checked;

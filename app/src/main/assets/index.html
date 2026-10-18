@@ -148,7 +148,7 @@ function editPost(id){
   <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
   <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onchange="previewSelectedPostMedia()"></div><div class="field"><label>Carousel — 2 to 10 images in one post</label><input id="pCarousel" type="file" accept="image/jpeg,image/png" multiple onchange="previewCarouselMedia()"><small id="carouselSelected">Existing carousel: ${(d.mediaIds||[]).length} images. JPG/PNG only.</small></div>
   ${p&&p.mediaId?`<div class="note">Attached media is saved locally (${esc(p.mediaName||'Original file')}). Changing media is optional.</div>`:''}
-  <div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><small>Preview only. Original is preserved. Platform-compliant export is not yet implemented.</small></div></div><div class="composer-stage" data-stage="3" hidden><div class="layout-actions"><div class="field"><label>Date</label><input id="pDate" type="date" value="${esc(d.date)}"></div><div class="field"><label>Time (IST)</label><input id="pTime" type="time" value="${esc(d.time)}"></div></div>
+  <div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><small>Carousel exports JPEG files at 1080×1350 (4:5) or 1080×1080 (1:1) when saved. Original images are never overwritten. Other media exports are unchanged.</small></div></div><div class="composer-stage" data-stage="3" hidden><div class="layout-actions"><div class="field"><label>Date</label><input id="pDate" type="date" value="${esc(d.date)}"></div><div class="field"><label>Time (IST)</label><input id="pTime" type="time" value="${esc(d.time)}"></div></div>
   <div class="field"><label>Content Type</label><select id="pKind"><option value="image" ${d.kind==='image'?'selected':''}>Photo / Poster</option><option value="reel" ${d.kind==='reel'?'selected':''}>Reel / Video</option><option value="carousel" ${d.kind==='carousel'?'selected':''}>Carousel (2–10 images)</option></select></div>
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
@@ -292,9 +292,23 @@ async function storePost(){
   const carouselFiles=[...pendingCarouselFiles];
   if(carouselFiles.length){
     if(carouselFiles.length<2||carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select 2–10 JPG/PNG images');return}
-    let ids=[];for(const f of carouselFiles){const id=uid().replace(/[^a-zA-Z0-9_-]/g,'');const bytes=new Uint8Array(await f.arrayBuffer());if(!await persistMedia(id,f.name,bytes)){ids.forEach(cleanupMedia);toast('Failed to store carousel image');return}ids.push(id)}
-    post.mediaIds=ids;post.mediaId=ids[0];post.mediaName=ids.length+' images';post.kind='carousel';
-    post.thumb=await thumbnail(new Uint8Array(await carouselFiles[0].arrayBuffer()),carouselFiles[0].type);
+    let ids=[],firstBytes=null;
+    const selectedRatio=document.getElementById('pRatio')?.value||'original';
+    const targetRatio=(selectedRatio==='1:1'||selectedRatio==='4:5')?selectedRatio:'4:5';
+    const fitMode=document.getElementById('pFit')?.value||'contain';
+    try{
+      for(let n=0;n<carouselFiles.length;n++){
+        const converted=await normalizeCarouselImage(carouselFiles[n],targetRatio,fitMode);
+        const id=uid().replace(/[^a-zA-Z0-9_-]/g,'');
+        const bytes=new Uint8Array(await converted.arrayBuffer());
+        if(!await persistMedia(id,'carousel_'+(n+1)+'.jpg',bytes))throw Error('Cannot save carousel image '+(n+1));
+        if(!firstBytes)firstBytes=bytes;
+        ids.push(id);
+      }
+    }catch(e){ids.forEach(cleanupMedia);toast('Carousel preparation failed: '+(e.message||'Invalid image'));return}
+    post.mediaIds=ids;post.mediaId=ids[0];post.mediaName=ids.length+' prepared JPEG images';
+    post.kind='carousel';post.ratio=targetRatio;post.fitMode=fitMode;
+    post.thumb=await thumbnail(firstBytes,'image/jpeg');
   }
   let file=carouselFiles.length?null:(editedPosterFile||document.getElementById('pMedia').files[0]);
   if(post.kind==='carousel'&&(!post.mediaIds||post.mediaIds.length<2)){toast('Attach 2–10 carousel images');return}
@@ -366,6 +380,34 @@ function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Date
 async function thumbnail(bytes,mime){return new Promise(resolve=>{if(!mime.startsWith('image/'))return resolve('');let blob=new Blob([bytes],{type:mime}),u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{let c=document.createElement('canvas'),scale=Math.min(1,160/Math.max(im.width,im.height));c.width=Math.round(im.width*scale);c.height=Math.round(im.height*scale);let ctx=c.getContext('2d');ctx.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);resolve(c.toDataURL('image/jpeg',.58))};im.onerror=()=>{URL.revokeObjectURL(u);resolve('')};im.src=u})}
 function safeFileName(name){return String(name||'media').split('/').pop().slice(0,160)}
 function base64Chunk(bytes){let result='';for(let i=0;i<bytes.length;i++)result+=String.fromCharCode(bytes[i]);return btoa(result)}
+async function normalizeCarouselImage(file,ratio,fitMode){
+ // Render to a common Instagram-supported canvas dimension before persisting/uploading.
+ // The user's original File remains untouched.
+ const dimensions=ratio==='1:1'?[1080,1080]:[1080,1350];
+ const blobURL=URL.createObjectURL(file);
+ try{
+   const image=await new Promise((resolve,reject)=>{
+     const img=new Image();
+     img.onload=()=>resolve(img);
+     img.onerror=()=>reject(Error('Could not decode '+file.name));
+     img.src=blobURL;
+   });
+   const iw=image.naturalWidth,ih=image.naturalHeight;
+   if(!iw||!ih)throw Error('Invalid image dimensions');
+   const canvas=document.createElement('canvas');
+   canvas.width=dimensions[0];canvas.height=dimensions[1];
+   const ctx=canvas.getContext('2d');
+   if(!ctx)throw Error('Image converter unavailable');
+   ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,canvas.width,canvas.height);
+   const scale=(fitMode==='cover'?Math.max:Math.min)(canvas.width/iw,canvas.height/ih);
+   const w=iw*scale,h=ih*scale;
+   ctx.drawImage(image,(canvas.width-w)/2,(canvas.height-h)/2,w,h);
+   const output=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('JPEG export failed')),'image/jpeg',0.92));
+   if(output.size>8*1024*1024)throw Error('Prepared image exceeds 8 MB');
+   return output;
+ }finally{URL.revokeObjectURL(blobURL)}
+}
 async function persistMedia(id,name,bytes){
  try{
    if(window.PostFlowNative?.beginMedia){
@@ -475,7 +517,7 @@ function submitPublishPost(id){
  const selected=accounts.flatMap((a,i)=>{const placement=document.getElementById('pub_'+i)?.value;return placement?[{a,placement}]:[]});
  if(!selected.length)return toast('Select at least one destination');
  if(Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.serverId&&['scheduled','processing','published','attention'].includes(j.status)))return toast('A server job already exists. Check its status before uploading again.');
- if(!confirm('Schedule '+selected.length+' publishing job(s) on WordPress for '+p.date+' '+p.time+' IST? Review destination ratios before confirming.'))return;
+ if(!confirm('Schedule '+selected.length+' publishing job(s) on WordPress for '+p.date+' '+p.time+' IST?'))return;
  state.wpPendingJobs=state.wpPendingJobs||{};
  selected.forEach(({a,placement})=>{
   const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');

@@ -746,15 +746,21 @@ function issueHelp(j){
  if(/cron|schedule|timeout|network|connection|500|502|503/.test(lower))return {cause:'The server scheduler or API connection may be unavailable.',fix:'Check WordPress scheduled tasks and hosting logs. Do not resubmit until you confirm this job did not publish.'};
  return {cause:raw?'The server or platform rejected this publishing attempt.':'The publishing status is pending confirmation.',fix:'Review the technical error below and check the account on the platform before retrying.'};
 }
-function jobStatusClass(j){return ['failed','attention','error','upload_failed'].includes(j.status)?'red':j.status==='published'?'green':''}
+function jobOverdue(j){
+ const next=Number(j.next_attempt_at||j.scheduled_at||0),start=Number(j.processing_started_at||j.attempted_at||0),now=Math.floor(Date.now()/1000);
+ return (j.status==='scheduled'&&next&&next<now-300)||(j.status==='processing'&&start&&start<now-600);
+}
+function jobDisplayStatus(j){return jobOverdue(j)?'delayed · investigate':String(j.status||'unknown')}
+function jobStatusClass(j){return jobOverdue(j)||['failed','attention','error','upload_failed'].includes(j.status)?'red':j.status==='published'?'green':''}
 function jobErrorPanel(j){
  const e=String(j.error||j.last_error||'').slice(0,1200);
+ if(jobOverdue(j))return '<div class="detail-error"><strong>Publishing delayed</strong><p>This job is past its due time or processing has stalled. Check WordPress cron and Instagram before retrying; duplicate posts may result.</p><p>Scheduled: '+publishTime(j.scheduled_at)+' · Next attempt: '+publishTime(j.next_attempt_at)+' · Attempts: '+Number(j.attempts||0)+'</p></div>';
  if(!['failed','attention','error','upload_failed'].includes(j.status)&&!e)return '';
  const guide=issueHelp(j);
  return '<div class="detail-error"><strong>Why was this post not published?</strong><p>'+esc(guide.cause)+'</p><p><b>What to do:</b> '+esc(guide.fix)+'</p><div class="line"></div><small>Platform / server error: '+esc(e||'No detailed error was provided by the server.')+'</small><small> · Code: '+esc(j.error_code||'Not provided')+'</small></div>';
 }
 function showPublishJobs(){
- const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Issue: '+esc(String(j.error).slice(0,110))+'</small>':'')+'</div><span class="rowbtn">Details ›</span></div>').join('');
+ const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><span class="tag '+jobStatusClass(j)+'">'+esc(jobDisplayStatus(j))+'</span><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Issue: '+esc(String(j.error).slice(0,110))+'</small>':'')+'</div><span class="rowbtn">Details ›</span></div>').join('');
  showModal({title:'Publishing Center',body:'<p class="sub">Live server results. Publishing and local reminders are separate.</p>'+(jobs||'<div class="empty">No server jobs yet</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});
 }
 function dateTimeLocalIST(unix){if(!unix)return '';const d=new Date((unix+19800)*1000);return d.toISOString().slice(0,16)}
@@ -788,7 +794,7 @@ function showJobDetail(id){
  const attempted=j.attempted_at||null;
  const progress='<div class="card"><h3>Publishing Timeline</h3><p>① Scheduled · '+publishTime(j.scheduled_at)+'</p><p>② Attempted · '+publishTime(attempted)+'</p><p>③ '+(j.status==='published'?'Published':'Current status: '+esc(j.status))+' · '+actual+'</p></div>';
  const actions=j.status==='scheduled'?'<div class="actions">'+btn('Edit Schedule','openJobEdit('+id+')')+btn('Cancel Schedule','cancelServerJob('+id+')','secondary')+'</div>':'';
- showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(j.status)+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+actions+'<div class="note">Verify the live platform post before retrying. Completed jobs cannot be edited.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
+ showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(jobDisplayStatus(j))+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+actions+'<div class="note">Verify the live platform post before retrying. Completed jobs cannot be edited.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
 }
 
 function hasWordPressPair(){try{return !!window.PostFlowNative?.isWordPressPaired?.()}catch(e){return false}}

@@ -93,8 +93,8 @@ function navRender(){let data=[['home','⌂','Home'],['calendar','▦','Calendar
 function render(){navRender();const el=document.getElementById('page');let c=counts();if(page==='home'){
  const upcoming=[...state.posts].filter(p=>p.status==='scheduled').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,4);
  const jobs=state.wpServerJobs||[],failed=jobs.filter(j=>['failed','attention','error'].includes(j.status)).length;
- const published=jobs.filter(j=>j.status==='published').length;
- el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.0</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
+ const published=jobs.filter(j=>j.status==='published'&&j.verification_status==='verified').length;
+ el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.1</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
  +'<div class="card hero-create"><b>Ready for your next post?</b><p class="sub">Photos, Reels and carousels in one simple flow.</p>'+btn('＋ Create Post','compose()','full')+'</div>'
  +'<div class="stats compact-stats"><div class="stat"><small>Scheduled locally</small><b>'+c.scheduled+'</b></div><div class="stat"><small>Published on server</small><b>'+published+'</b></div><div class="stat"><small>Publishing errors</small><b>'+failed+'</b></div></div>'
  +(failed?'<div class="detail-error" onclick="refreshPublishJobs()"><strong>'+failed+' publishing job(s) need attention</strong><p>Tap to open the Publishing Center and see the actual error.</p></div>':'')
@@ -750,12 +750,12 @@ function jobOverdue(j){
  const next=Number(j.next_attempt_at||j.scheduled_at||0),start=Number(j.processing_started_at||j.attempted_at||0),now=Math.floor(Date.now()/1000);
  return (j.status==='scheduled'&&next&&next<now-300)||(j.status==='processing'&&start&&start<now-600);
 }
-function jobDisplayStatus(j){return jobOverdue(j)?'delayed · investigate':String(j.status||'unknown')}
-function jobStatusClass(j){return jobOverdue(j)||['failed','attention','error','upload_failed'].includes(j.status)?'red':j.status==='published'?'green':''}
+function jobDisplayStatus(j){if(jobOverdue(j))return 'delayed · investigate';if(j.status==='awaiting_verification')return 'Awaiting verification';if(j.status==='published'&&j.verification_status!=='verified')return 'Unverified published claim';if(j.status==='published')return 'Verified Published';return String(j.status||'unknown')}
+function jobStatusClass(j){return jobOverdue(j)||['failed','attention','error','upload_failed'].includes(j.status)?'red':j.status==='published'&&j.verification_status==='verified'?'green':''}
 function jobErrorPanel(j){
  const e=String(j.error||j.last_error||'').slice(0,1200);
  if(jobOverdue(j))return '<div class="detail-error"><strong>Publishing delayed</strong><p>This job is past its due time or processing has stalled. Check WordPress cron and Instagram before retrying; duplicate posts may result.</p><p>Scheduled: '+publishTime(j.scheduled_at)+' · Next attempt: '+publishTime(j.next_attempt_at)+' · Attempts: '+Number(j.attempts||0)+'</p></div>';
- if(!['failed','attention','error','upload_failed'].includes(j.status)&&!e)return '';
+ if(!['failed','attention','error','upload_failed','awaiting_verification'].includes(j.status)&&!e&&!(j.status==='published'&&j.verification_status!=='verified'))return '';
  const guide=issueHelp(j);
  return '<div class="detail-error"><strong>Why was this post not published?</strong><p>'+esc(guide.cause)+'</p><p><b>What to do:</b> '+esc(guide.fix)+'</p><div class="line"></div><small>Platform / server error: '+esc(e||'No detailed error was provided by the server.')+'</small><small> · Code: '+esc(j.error_code||'Not provided')+'</small></div>';
 }
@@ -792,7 +792,7 @@ function showJobDetail(id){
  const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j)return;
  const actual=j.published_at?publishTime(j.published_at,j.status):publishTime(null,j.status);
  const attempted=j.attempted_at||null;
- const progress='<div class="card"><h3>Publishing Timeline</h3><p>① Scheduled · '+publishTime(j.scheduled_at)+'</p><p>② Attempted · '+publishTime(attempted)+'</p><p>③ '+(j.status==='published'?'Published':'Current status: '+esc(j.status))+' · '+actual+'</p></div>';
+ const progress='<div class="card"><h3>Publishing Timeline</h3><p>① Scheduled · '+publishTime(j.scheduled_at)+'</p><p>② Attempted · '+publishTime(attempted)+'</p><p>③ '+(j.status==='published'&&j.verification_status==='verified'?'Verified Published':'Current status: '+esc(jobDisplayStatus(j)))+' · '+actual+'</p></div>';
  const actions=j.status==='scheduled'?'<div class="actions">'+btn('Edit Schedule','openJobEdit('+id+')')+btn('Cancel Schedule','cancelServerJob('+id+')','secondary')+'</div>':'';
  showModal({title:'Publishing Details',body:'<div class="card"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><p>Status: <span class="tag '+jobStatusClass(j)+'">'+esc(jobDisplayStatus(j))+'</span></p><p>Scheduled Time: '+publishTime(j.scheduled_at)+'</p><p>Attempted Time: '+publishTime(attempted)+'</p><p>Actual Published Time: '+actual+'</p><p>Media count: '+Number(j.media_count||1)+'</p><p>Meta ID: '+esc(j.external_post_id||'Not available')+'</p></div>'+progress+jobErrorPanel(j)+actions+'<div class="note">Verify the live platform post before retrying. Completed jobs cannot be edited.</div>'+btn('Back to Jobs','showPublishJobs()','full')});
 }

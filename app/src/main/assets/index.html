@@ -152,15 +152,50 @@ function editPost(id){
   <div class="field"><label>Content Type</label><select id="pKind"><option value="image" ${d.kind==='image'?'selected':''}>Photo / Poster</option><option value="reel" ${d.kind==='reel'?'selected':''}>Reel / Video</option><option value="carousel" ${d.kind==='carousel'?'selected':''}>Carousel (2–10 images)</option></select></div>
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
-  ${acct}</div><div class="composer-stage" data-stage="5" hidden><div class="field"><label>Publishing State</label><select id="pStatus"><option value="scheduled" ${d.status==='scheduled'?'selected':''}>Scheduled / Reminder armed</option><option value="draft" ${d.status==='draft'?'selected':''}>Draft</option><option value="paused" ${d.status==='paused'?'selected':''}>Paused — no reminders</option><option value="manually_posted" ${d.status==='manually_posted'?'selected':''}>Marked shared manually</option></select></div>
-  <div class="card"><b>Publish to WordPress</b><p class="sub">Choose where this post should publish. The Schedule Post button saves media and sends it to WordPress immediately.</p>${(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram').map((a,i)=>'<div class="field"><label>'+esc(a.name)+' ('+esc(a.platform)+')</label><select class="direct-destination" data-index="'+i+'"><option value="">Do not publish here</option>'+'<option value="feed">Feed Post</option><option value="carousel">Carousel Feed</option><option value="story">Story</option><option value="reel">Reel</option>'+'</select></div>').join('')||'<div class="note">No synced publishing accounts. Connect WordPress first.</div>'}</div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
-  <div class="line"></div><div class="note">Schedule Post submits to WordPress directly. The post is only confirmed scheduled after WordPress accepts the job. Save as Draft does not publish anything.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
+  ${acct}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
+  <div class="card"><b>Ready to Schedule</b><p class="sub">Your Step 4 destinations are used automatically. No need to select accounts again.</p><div id="reviewDestinations" class="note">Review your destinations.</div><div class="field"><label>Publishing date (IST)</label><input id="reviewDate" type="date" value="${esc(d.date)}" oninput="syncReviewSchedule()"></div><div class="field"><label>Publishing time (IST)</label><input id="reviewTime" type="time" value="${esc(d.time)}" oninput="syncReviewSchedule()"></div><div class="actions">${btn('10 minutes from now','setReviewTenMinutes()','mini secondary')}</div><div id="reviewTimeError" class="detail-error" style="display:none" role="alert"></div><small>WordPress requires a future time. Select at least two minutes ahead.</small></div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
+  <div class="line"></div><div class="note">Schedule Post uses your already selected Step 4 destinations. WordPress acceptance confirms the job; draft saves only on this device.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
   const steps=document.querySelectorAll('#overlay .composer-stage');
   if(steps.length===5){steps[0].dataset.stage='2';steps[1].dataset.stage='1';steps[0].parentNode.insertBefore(steps[1],steps[0]);}
   setComposerStage(1);updateRatioPreview();
 }
 
 let composerStage=1;
+function composerWordPressDestinations(){
+ const accounts=(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram');
+ const chosen=[];
+ const carousel=pendingCarouselFiles.length>1||document.getElementById('pKind')?.value==='carousel';
+ const reel=!carousel&&document.getElementById('pKind')?.value==='reel';
+ for(const account of accounts){
+   const platform=account.platform;
+   const feed=document.getElementById('tar_'+(platform==='facebook'?'fb_feed':'ig_feed'))?.checked;
+   const story=document.getElementById('tar_'+(platform==='facebook'?'fb_story':'ig_story'))?.checked;
+   if(feed)chosen.push({a:account,placement:carousel?'carousel':reel?'reel':'feed'});
+   if(story&&!carousel)chosen.push({a:account,placement:'story'});
+ }
+ return chosen;
+}
+function updateReviewDestinations(){
+ const display=document.getElementById('reviewDestinations');if(!display)return;
+ const found=composerWordPressDestinations();
+ display.innerHTML=found.length?found.map(x=>'<div>✓ '+esc(x.a.name)+' · '+esc(x.placement)+'</div>').join(''):'<b>No eligible WordPress accounts selected.</b> Go back to Accounts and select Instagram/Facebook Feed or Story.';
+ const manual=DEST.filter(([key])=>!['ig_feed','ig_story','fb_feed','fb_story'].includes(key)&&document.getElementById('tar_'+key)?.checked).map(([,name])=>name);
+ if(manual.length)display.innerHTML+='<small>Manual or pending integrations (not sent to WordPress): '+esc(manual.join(', '))+'</small>';
+}
+function syncReviewSchedule(){
+ const date=document.getElementById('reviewDate')?.value,time=document.getElementById('reviewTime')?.value;
+ const mainDate=document.getElementById('pDate'),mainTime=document.getElementById('pTime');
+ if(date&&mainDate)mainDate.value=date;
+ if(time&&mainTime)mainTime.value=time;
+ const error=document.getElementById('reviewTimeError');if(error)error.style.display='none';
+}
+function setReviewTenMinutes(){
+ const ist=new Date(Date.now()+10*60000+330*60000).toISOString();
+ const date=document.getElementById('reviewDate'),time=document.getElementById('reviewTime');
+ if(date)date.value=ist.slice(0,10);
+ if(time)time.value=ist.slice(11,16);
+ syncReviewSchedule();
+}
 function setComposerStage(n){
  composerStage=Math.max(1,Math.min(5,n));
  const names=['Media','Caption','Schedule','Accounts','Review'];
@@ -170,6 +205,7 @@ function setComposerStage(n){
  const back=document.getElementById('wizBack'),next=document.getElementById('wizNext');
  if(back)back.disabled=composerStage===1;
  if(next)next.style.display=composerStage===5?'none':'block';
+ if(composerStage===5){syncReviewSchedule();updateReviewDestinations();}
  document.querySelector('#overlay .sheet')?.scrollTo({top:0,behavior:'smooth'});
 }
 function moveComposer(delta){
@@ -281,17 +317,18 @@ function posterApplyLogo(){if(!posterLogoImage){toast('Choose logo first');retur
 function posterCancel(){closeModal();editPost(editing);posterRestoreForm(posterDraftFields);posterDraftFields=null}
 function posterSaveCopy(){const merged=document.createElement('canvas');merged.width=posterWork.width;merged.height=posterWork.height;const ctx=merged.getContext('2d');ctx.drawImage(posterWork,0,0);const sel=posterSelected;posterSelected=-1;posterDrawLayers(ctx);posterSelected=sel;posterPendingLayers=JSON.parse(JSON.stringify(posterLayers));merged.toBlob(blob=>{if(!blob){toast('Image export failed');return}editedPosterFile=new File([blob],'postflow-edited-'+Date.now()+'.jpg',{type:'image/jpeg'});const data=merged.toDataURL('image/jpeg',.85);closeModal();editPost(editing);posterRestoreForm(posterDraftFields);posterDraftFields=null;const preview=document.getElementById('postLargePreview');if(preview){preview.src=data;preview.style.display='block'}toast('Edited copy ready. Tap Save Post to attach it.')},'image/jpeg',.9)}
 async function storePost(scheduleNow=false){
-  const selectedWP=scheduleNow?Array.from(document.querySelectorAll('.direct-destination')).filter(x=>x.value).map(x=>({a:(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram')[Number(x.dataset.index)],placement:x.value})).filter(x=>x.a):[];
+  syncReviewSchedule();
+  const selectedWP=scheduleNow?composerWordPressDestinations():[];
   if(scheduleNow){
     if(!hasWordPressPair())return toast('WordPress not connected. Save as Draft first, then connect through Accounts.');
-    if(!selectedWP.length)return toast('Choose a WordPress publishing account before scheduling.');
+    if(!selectedWP.length)return toast('No connected WordPress destination selected. Go back to Accounts (Step 4).');
     const d=document.getElementById('pDate')?.value,t=document.getElementById('pTime')?.value;
     const at=Date.parse(d+'T'+t+':00+05:30')/1000;
-    if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120)return toast('Choose a future schedule at least 2 minutes ahead (IST).');
+    if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120){const error=document.getElementById('reviewTimeError');if(error){error.style.display='block';error.textContent='Selected time is too early. Current IST: '+new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+'. Tap 10 minutes from now, or choose a later date and time.';}return;}
     if(!window.PostFlowNative?.queueWordPressPost)return toast('Android publishing support unavailable.');
     const chosenCarousel=pendingCarouselFiles.length>1||document.getElementById('pKind')?.value==='carousel';
     if(selectedWP.some(x=>x.placement==='carousel')&&!chosenCarousel&&!((editing&&state.posts.find(x=>x.id===editing)?.mediaIds?.length>1)))return toast('Choose 2–10 carousel photos before selecting Carousel Feed.');
-    if(chosenCarousel&&selectedWP.some(x=>x.placement!=='carousel'))return toast('Multiple photos require Carousel Feed. Select Carousel for each chosen publishing account.');
+    if(chosenCarousel&&selectedWP.some(x=>x.placement!=='carousel'))return toast('Carousel images require feed destinations only; go back to Accounts and unselect Story.');
   }
 
   const title=document.getElementById('pTitle').value.trim(),date=document.getElementById('pDate').value,time=document.getElementById('pTime').value,status=document.getElementById('pStatus').value;

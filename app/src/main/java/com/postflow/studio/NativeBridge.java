@@ -183,6 +183,44 @@ public final class NativeBridge {
         }).start();
     }
 
+
+    @JavascriptInterface public void editWordPressJob(int id,String placement,String externalId,String caption,long scheduledAt){
+        mutateWordPressJob(id,"PATCH",placement,externalId,caption,scheduledAt);
+    }
+    @JavascriptInterface public void cancelWordPressJob(int id){
+        mutateWordPressJob(id,"DELETE","","","",0);
+    }
+    private void mutateWordPressJob(int id,String method,String placement,String externalId,String caption,long scheduledAt){
+        new Thread(()->{
+            java.net.HttpURLConnection c=null;
+            try{
+                if(id<1)throw new IOException("Invalid job ID");
+                c=(java.net.HttpURLConnection)new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs/"+id).openConnection();
+                c.setRequestMethod(method);c.setConnectTimeout(12000);c.setReadTimeout(18000);
+                c.setRequestProperty("Authorization","Bearer "+wordpressKey());
+                c.setRequestProperty("Accept","application/json");
+                if("PATCH".equals(method)){
+                    org.json.JSONObject request=new org.json.JSONObject();
+                    request.put("placement",placement);request.put("external_id",externalId);
+                    request.put("caption",caption==null?"":caption);request.put("scheduled_at",scheduledAt);
+                    c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=UTF-8");
+                    try(java.io.OutputStream out=c.getOutputStream()){out.write(request.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));}
+                }
+                int status=c.getResponseCode();String body="";
+                try(java.io.InputStream in=status<400?c.getInputStream():c.getErrorStream()){
+                    if(in!=null){java.io.ByteArrayOutputStream b=new java.io.ByteArrayOutputStream();byte[] buf=new byte[2048];int n;while((n=in.read(buf))!=-1&&b.size()<30000)b.write(buf,0,n);body=b.toString("UTF-8");}
+                }
+                org.json.JSONObject result=new org.json.JSONObject();
+                result.put("mutation",method);result.put("job_id",id);result.put("ok",status>=200&&status<300);
+                if(status>=200&&status<300){result.put("job",new org.json.JSONObject(body).optJSONObject("job"));}
+                else result.put("error",safeWordPressError(body,"WordPress rejected change (HTTP "+status+")"));
+                sendPublishResult(result.toString());
+            }catch(Exception ex){
+                try{org.json.JSONObject o=new org.json.JSONObject();o.put("mutation",method);o.put("job_id",id);o.put("ok",false);o.put("error","Could not confirm change with WordPress; refresh status before trying again.");sendPublishResult(o.toString());}catch(Exception ignored){}
+            }finally{if(c!=null)c.disconnect();}
+        }).start();
+    }
+
     @JavascriptInterface public void getWordPressJobs(){
         new Thread(()->{
             java.net.HttpURLConnection c=null;

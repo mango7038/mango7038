@@ -2,19 +2,62 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widgetRoot" android:layout_width="match_parent"
     android:layout_height="match_parent" android:orientation="vertical"
-    android:padding="12dp" android:background="@drawable/widget_background">
-    <TextView android:id="@+id/widgetTitle" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="✦ FESTIVAL CALENDAR"
-        android:textColor="#C9BDFF" android:textSize="12sp" android:textStyle="bold" />
+    android:padding="10dp" android:background="@drawable/widget_background">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/widgetTitle" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="OCT 2026" android:textColor="#FFFFFF"
+            android:textSize="17sp" android:textStyle="bold" />
+        <TextView android:id="@+id/widgetToday" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:padding="7dp" android:text="Today" android:textColor="#DBCFFF" android:textSize="12sp"
+            android:background="#343049" />
+    </LinearLayout>
     <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
-        android:layout_height="165dp" android:scaleType="fitCenter" android:contentDescription="Current month with festival markers" />
-    <TextView android:id="@+id/widgetNext" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:text="Add a festival or birthday"
-        android:textColor="#FFFFFF" android:textSize="14sp" android:maxLines="1" />
-    <TextView android:id="@+id/widgetSecond" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:layout_marginTop="3dp"
-        android:textColor="#ADB7D4" android:textSize="11sp" android:maxLines="1" />
-    <TextView android:id="@+id/widgetThird" android:layout_width="match_parent"
-        android:layout_height="wrap_content" android:layout_marginTop="3dp"
-        android:textColor="#ADB7D4" android:textSize="11sp" android:maxLines="1" />
+        android:layout_height="64dp" android:layout_marginTop="7dp" android:scaleType="fitXY"
+        android:contentDescription="Seven-day calendar with selected date" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/widgetPrevDay" android:layout_width="45dp" android:layout_height="wrap_content"
+            android:text="‹" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />
+        <TextView android:id="@+id/widgetSelectedDay" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="wrap_content" android:text="Today" android:gravity="center"
+            android:textColor="#AAA9C6" android:textSize="11sp" android:maxLines="1" />
+        <TextView android:id="@+id/widgetNextDay" android:layout_width="45dp" android:layout_height="wrap_content"
+            android:text="›" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="4dp">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView android:id="@+id/widgetSecond" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="POST • STORY" android:textColor="#C3B3FF"
+                android:textSize="10sp" android:maxLines="1" />
+            <TextView android:id="@+id/widgetNext" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="Festival poster" android:textColor="#FFFFFF"
+                android:textSize="17sp" android:textStyle="bold" android:maxLines="2" />
+            <TextView android:id="@+id/widgetThird" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:textColor="#9FABC4" android:textSize="10sp"
+                android:maxLines="1" />
+        </LinearLayout>
+        <ImageView android:id="@+id/widgetPoster" android:layout_width="82dp" android:layout_height="100dp"
+            android:scaleType="centerCrop" android:contentDescription="Selected post original poster preview"/>
+        <LinearLayout android:layout_width="60dp" android:layout_height="wrap_content" android:orientation="vertical">
+            <TextView android:id="@+id/widgetOpen" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="View" android:textSize="12sp" android:textColor="#FFFFFF" android:gravity="center"
+                android:padding="9dp" android:background="#6E43DA" />
+            <TextView android:id="@+id/widgetShare" android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="Share" android:textSize="12sp" android:textColor="#FFFFFF" android:gravity="center"
+                android:padding="9dp" android:layout_marginTop="5dp" android:background="#3E3C57" />
+        </LinearLayout>
+    </LinearLayout>
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical">
+        <TextView android:id="@+id/widgetPrevPost" android:layout_width="50dp" android:layout_height="wrap_content"
+            android:text="◀" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />
+        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+            android:text="POSTFLOW · SMART CALENDAR" android:gravity="center"
+            android:textColor="#8987AB" android:textSize="9sp" />
+        <TextView android:id="@+id/widgetNextPost" android:layout_width="50dp" android:layout_height="wrap_content"
+            android:text="▶" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />
+    </LinearLayout>
 </LinearLayout>

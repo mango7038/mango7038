@@ -2,7 +2,7 @@ name: Build PostFlow Android Debug APK
 on:
   workflow_dispatch:
   push:
-    branches: [postflow-v3-build]
+    branches: [main]
 permissions:
   contents: read
 jobs:
@@ -23,14 +23,15 @@ jobs:
         run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
       - name: Compile Android app
         run: gradle --no-daemon --stacktrace :app:assembleDebug
+        working-directory: postflow-studio
       - name: Validate APK
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          test -s postflow-studio/app/build/outputs/apk/debug/app-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose postflow-studio/app/build/outputs/apk/debug/app-debug.apk
+          ls -lh postflow-studio/app/build/outputs/apk/debug/app-debug.apk
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: PostFlow-Studio-v3-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: postflow-studio/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

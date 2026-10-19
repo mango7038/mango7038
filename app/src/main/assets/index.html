@@ -78,15 +78,61 @@ function dateLocal(d=new Date()){let a=new Intl.DateTimeFormat('en-CA',{timeZone
 function addDays(s,n){let d=new Date(s+'T12:00:00Z');d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10)}
 function fmt(s){if(!s)return'Unknown date';let d=new Date(s+'T12:00:00Z');return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric',timeZone:'UTC'})}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
-function due(p){return p.status==='scheduled' && (p.date<dateLocal()||(p.date===dateLocal()&&p.time <= new Intl.DateTimeFormat('en-GB',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date())))}
+
+function validScheduleIST(date,time,minLeadSeconds=120){
+ if(!validFestivalDateTime(String(date||''),String(time||'')))return {ok:false,message:'Choose a valid date and time (IST).'};
+ const when=Math.floor(Date.parse(date+'T'+time+':00+05:30')/1000);
+ const now=Math.floor(Date.now()/1000);
+ if(when<now+minLeadSeconds)return {ok:false,message:'Selected '+date+' '+time+' IST is in the past or less than 2 minutes away. Current time: '+new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+'.'};
+ return {ok:true,when};
+}
+function setReviewOffset(minutes){
+ const d=new Date(Date.now()+minutes*60000+330*60000).toISOString();
+ const date=document.getElementById('reviewDate'),time=document.getElementById('reviewTime');
+ if(date)date.value=d.slice(0,10);if(time)time.value=d.slice(11,16);syncReviewSchedule();
+}
+function localPublishingJobs(post){
+ return Object.values(state.wpPendingJobs||{}).filter(j=>j.postId===post.id);
+}
+function postTrackingState(post){
+ const jobs=localPublishingJobs(post);
+ const serverJobs=(state.wpServerJobs||[]).filter(j=>jobs.some(k=>Number(k.serverId||0)===Number(j.id))||(j.client_job_id&&jobs.some(k=>k.clientId===j.client_job_id)));
+ if(!jobs.length)return null;
+ if(serverJobs.some(j=>j.status==='published'&&j.verification_status==='verified'))return 'published';
+ if(serverJobs.some(j=>j.status==='awaiting_verification'||(j.status==='published'&&j.verification_status!=='verified')))return 'verification';
+ if(serverJobs.some(j=>j.status==='failed'||j.status==='attention'||j.status==='error'))return 'failed';
+ if(jobs.some(j=>['uploading','pending','upload_requested'].includes(j.status)))return 'uploading';
+ if(serverJobs.some(j=>j.status==='processing')||jobs.some(j=>j.status==='processing'))return 'processing';
+ if(serverJobs.some(j=>j.status==='scheduled')||jobs.some(j=>j.status==='scheduled'))return 'scheduled';
+ if(jobs.some(j=>j.status==='upload_failed'))return 'failed';
+ return null;
+}
+function reconcileServerJobs(){
+ for(const p of state.posts){
+  const status=postTrackingState(p);
+  if(status==='published')p.status='published';
+  else if(status==='verification')p.status='awaiting_verification';
+  else if(status==='failed')p.status='attention';
+  else if(status==='processing')p.status='processing';
+  else if(status==='uploading')p.status='uploading';
+  else if(status==='scheduled')p.status='scheduled';
+ }
+}
+let postSubmitBusy=false;
+function setScheduleBusy(busy){
+ postSubmitBusy=busy;
+ const buttons=[...document.querySelectorAll('#overlay button')].filter(b=>b.textContent.trim()==='Schedule Post'||b.textContent.trim()==='Scheduling…');
+ for(const b of buttons){b.disabled=busy;b.textContent=busy?'Scheduling…':'Schedule Post'}
+}
+function due(p){return !postTrackingState(p) && p.status==='scheduled' && (p.date<dateLocal()||(p.date===dateLocal()&&p.time <= new Intl.DateTimeFormat('en-GB',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date())))}
 function counts(){return{scheduled:state.posts.filter(x=>x.status==='scheduled'&&!due(x)).length,drafts:state.posts.filter(x=>x.status==='draft').length,due:state.posts.filter(x=>due(x)).length,events:state.events.length}}
 function notifyDue(){if(state.settings.notifications){let d=state.posts.filter(due).length;if(d)toast(`${d} local posting reminder(s) are due. Check server Publishing Jobs separately.`)}}
 function route(p){page=p;if(p!=='queue'){bulkMode=false;bulkSelected.clear()}render();window.scrollTo(0,0)}
 function toast(msg){let el=document.getElementById('toast');el.textContent=msg;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2900)}
 function btn(label,fn,cls='secondary'){return `<button class="btn ${cls}" onclick="${fn}">${label}</button>`}
 function media(p){return p.thumb?`<img class="thumb" src="${p.thumb}">`:`<div class="thumb">${p.kind==='reel'?'▶':'▧'}</div>`}
-function tag(p){return p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">Reminder due</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':'<span class="tag green">Scheduled</span>'}
-function postItem(p){return `<div class="item" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">${bulkMode?`<input type="checkbox" aria-label="Select post" style="width:20px;min-width:20px;accent-color:#987bff" ${bulkSelected.has(p.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${p.id}')">`:''}${media(p)}<div class="body"><b>${esc(p.title||'Untitled Post')}</b><small>${fmt(p.date)} • ${esc(p.time||'09:00')} IST</small><small>${esc((p.caption||'No caption generated').slice(0,92))}</small><small>${(p.targets||[]).length} channel(s) • ${Object.keys(p.accountTargets||{}).length} selected account(s)</small></div>${tag(p)}</div>`}
+function tag(p){const tracked=postTrackingState(p);if(tracked==='published')return '<span class="tag green">Verified Published ✓</span>';if(tracked==='verification')return '<span class="tag">Verification pending</span>';if(tracked==='failed')return '<span class="tag red">Publishing needs attention</span>';if(tracked==='processing')return '<span class="tag">Processing</span>';if(tracked==='uploading')return '<span class="tag">Uploading…</span>';if(tracked==='scheduled')return '<span class="tag green">Scheduled on server</span>';return p.status==='published'?'<span class="tag green">Published ✓</span>':p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">Reminder due</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':'<span class="tag green">Scheduled</span>'}
+function postItem(p){return `<div class="item" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">${bulkMode?`<input type="checkbox" aria-label="Select post" style="width:20px;min-width:20px;accent-color:#987bff" ${bulkSelected.has(p.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${p.id}')">`:''}${media(p)}<div class="body"><b>${esc(p.title||'Untitled Post')}</b><small>${fmt(p.date)} • ${esc(p.time||'09:00')} IST</small><small>${esc((p.caption||'No caption generated').slice(0,92))}</small><small>${(p.targets||[]).length} channel(s) • ${localPublishingJobs(p).length?localPublishingJobs(p).map(x=>x.account).filter(Boolean).join(', '):Object.keys(p.accountTargets||{}).length+' selected account(s)'}</small></div>${tag(p)}</div>`}
 function eventItem(ev){return `<div class="item" onclick="editEvent('${ev.id}')"><div class="thumb">${ev.type==='birthday'?'🎂':ev.type==='festival'?'🪔':'📆'}</div><div class="body"><b>${esc(ev.title)}</b><small>${fmt(ev.date)}${ev.repeat?' • Yearly':''}</small></div><span class="tag">${esc(ev.type)}</span></div>`}
 function openMenu(){showModal({title:'PostFlow Studio · Menu',body:`<div class="actions" style="display:grid;grid-template-columns:1fr 1fr;gap:10px">${[['home','⌂ Home'],['queue','▤ Post Queue'],['calendar','▦ Calendar'],['library','▧ ZIP Library'],['events','♧ Festivals & Events'],['accounts','◎ Social Accounts'],['settings','⚙ Settings'],['api','🔌 API Connections'],['trash','♻ Recycle Bin'],['brands','◈ Brand Profiles'],['captions','✎ Caption Library'],['mediaSearch','⌕ Media Search']].map(([p,t])=>`<button class="btn secondary" onclick="closeModal();${p==='api'?'apiManager()':p==='trash'?'recycleBin()':p==='brands'?'brandProfiles()':p==='captions'?'captionLibrary()':p==='mediaSearch'?'mediaSearch()':`route('${p}')`}">${t}</button>`).join('')}</div><div class="note" style="margin-top:15px">PostFlow Studio 6.1.1 · Android + WordPress scheduling. Server status must be verified before resubmission.</div>`})}
 function navRender(){let data=[['home','⌂','Home'],['calendar','▦','Calendar'],['compose','⊕','Create'],['queue','▤','Posts'],['accounts','◎','Accounts']];document.getElementById('nav').innerHTML=data.map(([id,ico,t])=>`<button class="navItem ${page===id?'active':''}" onclick="${id==='compose'?`compose()`:`route('${id}')`}"><span class="ico">${ico}</span>${t}</button>`).join('')}
@@ -94,7 +140,7 @@ function render(){navRender();const el=document.getElementById('page');let c=cou
  const upcoming=[...state.posts].filter(p=>p.status==='scheduled').sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time)).slice(0,4);
  const jobs=state.wpServerJobs||[],failed=jobs.filter(j=>['failed','attention','error'].includes(j.status)).length;
  const published=jobs.filter(j=>j.status==='published'&&j.verification_status==='verified').length;
- el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.3</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
+ el.innerHTML='<div class="topline"><div><h2>PostFlow Studio</h2><p class="sub">Create, schedule, and keep track of your content. · Build 6.2.5</p></div><a class="rowbtn" onclick="route(\'settings\')">⚙</a></div>'
  +'<div class="card hero-create"><b>Ready for your next post?</b><p class="sub">Photos, Reels and carousels in one simple flow.</p>'+btn('＋ Create Post','compose()','full')+'</div>'
  +'<div class="stats compact-stats"><div class="stat"><small>Scheduled locally</small><b>'+c.scheduled+'</b></div><div class="stat"><small>Published on server</small><b>'+published+'</b></div><div class="stat"><small>Publishing errors</small><b>'+failed+'</b></div></div>'
  +(failed?'<div class="detail-error" onclick="refreshPublishJobs()"><strong>'+failed+' publishing job(s) need attention</strong><p>Tap to open the Publishing Center and see the actual error.</p></div>':'')
@@ -157,7 +203,7 @@ function editPost(id){
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
   ${acct}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
-  <div class="card"><b>Ready to Schedule</b><p class="sub">Your Step 4 destinations are used automatically. No need to select accounts again.</p><div id="reviewDestinations" class="note">Review your destinations.</div><div class="field"><label>Publishing date (IST)</label><input id="reviewDate" type="date" value="${esc(d.date)}" oninput="syncReviewSchedule()"></div><div class="field"><label>Publishing time (IST)</label><input id="reviewTime" type="time" value="${esc(d.time)}" oninput="syncReviewSchedule()"></div><div class="actions">${btn('10 minutes from now','setReviewTenMinutes()','mini secondary')}</div><div id="reviewTimeError" class="detail-error" style="display:none" role="alert"></div><small>WordPress requires a future time. Select at least two minutes ahead.</small></div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
+  <div class="card"><b>Ready to Schedule</b><p class="sub">Your Step 4 destinations are used automatically. No need to select accounts again.</p><div id="reviewDestinations" class="note">Review your destinations.</div><div class="field"><label>Publishing date (IST)</label><input id="reviewDate" type="date" value="${esc(d.date)}" oninput="syncReviewSchedule()"></div><div class="field"><label>Publishing time (IST)</label><input id="reviewTime" type="time" value="${esc(d.time)}" oninput="syncReviewSchedule()"></div><div class="actions">${btn('+2 min','setReviewOffset(2)','mini secondary')}${btn('+10 min','setReviewOffset(10)','mini secondary')}${btn('+100 min','setReviewOffset(100)','mini secondary')}</div><div id="reviewTimeError" class="detail-error" style="display:none" role="alert"></div><small>WordPress requires a future time. Select at least two minutes ahead.</small></div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
   <div class="line"></div><div class="note">Schedule Post uses your already selected Step 4 destinations. WordPress acceptance confirms the job; draft saves only on this device.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
   const steps=[...document.querySelectorAll('#overlay .composer-stage')];
   if(steps.length===5){
@@ -175,7 +221,7 @@ let composerStage=1;
 function composerWordPressDestinations(){
  const accounts=(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram');
  const chosen=[];
- const carousel=pendingCarouselFiles.length>1||document.getElementById('pKind')?.value==='carousel';
+ const carousel=pendingCarouselFiles.length>1||(pendingCarouselFiles.length===0&&document.getElementById('pKind')?.value==='carousel');
  const reel=!carousel&&document.getElementById('pKind')?.value==='reel';
  for(const account of accounts){
    const platform=account.platform;
@@ -212,7 +258,7 @@ function setComposerStage(n){
  const names=['Content','Publish To','When & Confirm'];
  document.querySelectorAll('.composer-stage').forEach(x=>{x.hidden=Number(x.dataset.stage)!==composerStage});
  for(let i=1;i<=3;i++)document.getElementById('composerPip_'+i)?.classList.toggle('active',i<=composerStage);
- const progress=document.getElementById('wizardProgress');if(progress)progress.textContent='Step '+composerStage+' of 5 · '+names[composerStage-1];
+ const progress=document.getElementById('wizardProgress');if(progress)progress.textContent='Step '+composerStage+' of 3 · '+names[composerStage-1];
  const back=document.getElementById('wizBack'),next=document.getElementById('wizNext');
  if(back)back.disabled=composerStage===1;
  if(next)next.style.display=composerStage===3?'none':'block';
@@ -235,7 +281,7 @@ function previewCarouselMedia(){
  if(!incoming.length){const label=document.getElementById('carouselSelected');if(label)label.textContent='Android picker returned no files. Try Gallery / Files with multi-select enabled.';return}
  pendingCarouselFiles=incoming;
  if(incoming.length>10){pendingCarouselFiles=incoming.slice(0,10);toast('Carousel maximum is 10 images');}
- document.getElementById('pKind').value='carousel';
+ document.getElementById('pKind').value=pendingCarouselFiles.length>1?'carousel':'image';
  document.getElementById('pMedia').value='';
  renderCarouselSelected();
 }
@@ -268,7 +314,7 @@ function renderCarouselSelected(){
  if(n){const hero=document.getElementById('postLargePreview');if(hero&&carouselPreviewUrls[0]){hero.src=carouselPreviewUrls[0];hero.style.display='block';}}
 }
 
-function previewSelectedPostMedia(){const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');editedPosterFile=null;if(!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{preview.src=reader.result;preview.style.display='block'};reader.readAsDataURL(file)}
+function previewSelectedPostMedia(){const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');editedPosterFile=null;if(file){pendingCarouselFiles=[];document.getElementById('pKind').value=file.type.startsWith('video/')?'reel':'image';}if(!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{preview.src=reader.result;preview.style.display='block'};reader.readAsDataURL(file)}
 async function posterImageBlob(){
  if(editedPosterFile)return editedPosterFile;
  const f=document.getElementById('pMedia')?.files?.[0];if(f&&f.type.startsWith('image/'))return f;
@@ -329,19 +375,22 @@ function posterCancel(){closeModal();editPost(editing);posterRestoreForm(posterD
 function posterSaveCopy(){const merged=document.createElement('canvas');merged.width=posterWork.width;merged.height=posterWork.height;const ctx=merged.getContext('2d');ctx.drawImage(posterWork,0,0);const sel=posterSelected;posterSelected=-1;posterDrawLayers(ctx);posterSelected=sel;posterPendingLayers=JSON.parse(JSON.stringify(posterLayers));merged.toBlob(blob=>{if(!blob){toast('Image export failed');return}editedPosterFile=new File([blob],'postflow-edited-'+Date.now()+'.jpg',{type:'image/jpeg'});const data=merged.toDataURL('image/jpeg',.85);closeModal();editPost(editing);posterRestoreForm(posterDraftFields);posterDraftFields=null;const preview=document.getElementById('postLargePreview');if(preview){preview.src=data;preview.style.display='block'}toast('Edited copy ready. Tap Save Post to attach it.')},'image/jpeg',.9)}
 async function storePost(scheduleNow=false){
   syncReviewSchedule();
+  if(postSubmitBusy)return toast('Scheduling request is already in progress.');
   const selectedWP=scheduleNow?composerWordPressDestinations():[];
   if(scheduleNow){
     if(!hasWordPressPair())return toast('WordPress not connected. Save as Draft first, then connect through Accounts.');
-    if(!selectedWP.length)return toast('No connected WordPress destination selected. Go back to Accounts (Step 4).');
+    if(!selectedWP.length)return toast('Select a connected Instagram/Facebook account and Feed or Story in Step 2.');
     const d=document.getElementById('pDate')?.value,t=document.getElementById('pTime')?.value;
-    const at=Date.parse(d+'T'+t+':00+05:30')/1000;
-    if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120){const error=document.getElementById('reviewTimeError');if(error){error.style.display='block';error.textContent='Selected time is too early. Current IST: '+new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+'. Tap 10 minutes from now, or choose a later date and time.';}return;}
+    const check=validScheduleIST(d,t);
+    if(!check.ok){const error=document.getElementById('reviewTimeError');if(error){error.style.display='block';error.textContent=check.message;}return toast(check.message);}
     if(!window.PostFlowNative?.queueWordPressPost)return toast('Android publishing support unavailable.');
-    const chosenCarousel=pendingCarouselFiles.length>1||document.getElementById('pKind')?.value==='carousel';
+    const chosenCarousel=pendingCarouselFiles.length>1||(pendingCarouselFiles.length===0&&document.getElementById('pKind')?.value==='carousel');
     if(selectedWP.some(x=>x.placement==='carousel')&&!chosenCarousel&&!((editing&&state.posts.find(x=>x.id===editing)?.mediaIds?.length>1)))return toast('Choose 2–10 carousel photos before selecting Carousel Feed.');
-    if(chosenCarousel&&selectedWP.some(x=>x.placement!=='carousel'))return toast('Carousel images require feed destinations only; go back to Accounts and unselect Story.');
+    if(chosenCarousel&&selectedWP.some(x=>x.placement==='story'))return toast('Carousel cannot be published as a Story. Select Feed or use one image.');
   }
 
+  if(scheduleNow)setScheduleBusy(true);
+  try{
   const title=document.getElementById('pTitle').value.trim(),date=document.getElementById('pDate').value,time=document.getElementById('pTime').value,status=document.getElementById('pStatus').value;
   const targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('tar_'+k).checked);
   if(!title||!date||!time){toast('Title, date and time required');return}
@@ -352,7 +401,9 @@ async function storePost(scheduleNow=false){
   let post={...old,id,title,date,time,status:scheduleNow?'uploading': 'draft',targets,accountTargets,captionApproved:true,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
   const carouselFiles=[...pendingCarouselFiles];
   if(carouselFiles.length){
-    if(carouselFiles.length<2||carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select 2–10 JPG/PNG images');return}
+    if(carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select up to 10 JPG/PNG images');return}
+    if(carouselFiles.length===1){const single=carouselFiles[0];pendingCarouselFiles=[];const input=document.getElementById('pMedia');try{const dt=new DataTransfer();dt.items.add(single);input.files=dt.files;}catch(e){editedPosterFile=single;}}
+    else {
     let ids=[],firstBytes=null;
     const selectedRatio=document.getElementById('pRatio')?.value||'original';
     const targetRatio=(selectedRatio==='1:1'||selectedRatio==='4:5')?selectedRatio:'4:5';
@@ -370,10 +421,11 @@ async function storePost(scheduleNow=false){
     post.mediaIds=ids;post.mediaId=ids[0];post.mediaName=ids.length+' prepared JPEG images';
     post.kind='carousel';post.ratio=targetRatio;post.fitMode=fitMode;
     post.thumb=await thumbnail(firstBytes,'image/jpeg');
+    }
   }
-  let file=carouselFiles.length?null:(editedPosterFile||document.getElementById('pMedia').files[0]);
+  let file=carouselFiles.length>1?null:(editedPosterFile||document.getElementById('pMedia').files[0]);
   if(post.kind==='carousel'&&(!post.mediaIds||post.mediaIds.length<2)){toast('Attach 2–10 carousel images');return}
-  if(post.kind!=='carousel'&&!carouselFiles.length)post.mediaIds=[];
+  if(post.kind!=='carousel'&&carouselFiles.length<2)post.mediaIds=[];
   if(file){
     if(file.size>100*1024*1024){toast('Single file limit: 100 MB');return}
     const bytes=new Uint8Array(await file.arrayBuffer());
@@ -388,6 +440,7 @@ async function storePost(scheduleNow=false){
   (old.mediaIds?.length?old.mediaIds:[old.mediaId]).filter(Boolean).forEach(id=>{if(!(post.mediaIds||[]).includes(id)&&post.mediaId!==id&&post.sourceMediaId!==id&&!state.posts.some(x=>x.id!==post.id&&(x.mediaId===id||(x.mediaIds||[]).includes(id)||x.sourceMediaId===id)))cleanupMedia(id)});
   editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];closeModal();route('queue');
   if(scheduleNow){submitDirectWordPress(post,selectedWP);toast('Uploading to WordPress. Check Publishing Center for confirmation.');}else toast('Draft saved locally.');
+  }catch(e){console.error('Post scheduling error',e);toast('Scheduling error: '+String(e.message||e).slice(0,110));}finally{if(scheduleNow)setScheduleBusy(false)}
 }
 function setBulkMode(on){bulkMode=on;bulkSelected.clear();render()}
 function toggleBulk(id){if(bulkSelected.has(id))bulkSelected.delete(id);else bulkSelected.add(id);render()}
@@ -875,11 +928,11 @@ function submitPublishPost(id){
  const time=document.getElementById('publishTime')?.value||p.time;
  const timestamp=Date.parse(date+'T'+time+':00+05:30');
  const at=Math.floor(timestamp/1000);
- const now=Math.floor(Date.now()/1000);
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!/^\d{2}:\d{2}$/.test(time)||!Number.isFinite(at)||at<now+120){
+ const validation=validScheduleIST(date,time);
+ if(!validation.ok){
    const error=document.getElementById('publishTimeError');
    const nowIST=new Date().toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'});
-   if(error){error.style.display='block';error.textContent='Invalid publishing time. Current IST: '+nowIST+'. Select at least 2 minutes ahead, or use the +10 minutes button.';}
+   if(error){error.style.display='block';error.textContent=validation.message;}
    return;
  }
  const err=document.getElementById('publishTimeError');if(err)err.style.display='none';
@@ -904,8 +957,8 @@ window.onPostFlowPublish=function(raw){
  try{
   const r=JSON.parse(raw);
   if(r.mutation){if(r.ok&&r.job){state.wpServerJobs=(state.wpServerJobs||[]).map(j=>Number(j.id)===Number(r.job_id)?r.job:j);for(const local of Object.values(state.wpPendingJobs||{})){if(Number(local.serverId)===Number(r.job_id)){local.status=r.job.status;local.scheduled_at=r.job.scheduled_at;local.error=r.job.error||'';}}save();toast(r.mutation==='DELETE'?'Scheduled job cancelled on WordPress':'WordPress job updated');showJobDetail(Number(r.job_id));}else{toast(r.error||'Update was rejected');showJobDetail(Number(r.job_id));}return;}
-  if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';if(j.postId){const p=state.posts.find(x=>x.id===j.postId);if(p){const others=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===j.postId);p.status=others.every(x=>x.status==='upload_failed')?'draft':others.some(x=>x.status==='uploading')?'uploading':'scheduled';}}}save();toast(r.ok?'WordPress accepted the publishing job':r.error||'Upload failed');if(page==='accounts')render();}
-  else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}save();showPublishJobs();}
+  if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';if(j.postId){const p=state.posts.find(x=>x.id===j.postId);if(p){const others=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===j.postId);p.status=others.every(x=>x.status==='upload_failed')?'draft':others.some(x=>x.status==='uploading')?'uploading':'scheduled';}}}reconcileServerJobs();save();toast(r.ok?'WordPress accepted the publishing job':r.error||'Upload failed');if(page==='accounts')render();}
+  else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();showPublishJobs();}
   else if(r.error)toast(r.error);
  }catch(e){toast('Unexpected publishing response');}
 };
@@ -927,12 +980,13 @@ function jobOverdue(j){
  const next=Number(j.next_attempt_at||j.scheduled_at||0),start=Number(j.processing_started_at||j.attempted_at||0),now=Math.floor(Date.now()/1000);
  return (j.status==='scheduled'&&next&&next<now-300)||(j.status==='processing'&&start&&start<now-600);
 }
-function jobDisplayStatus(j){if(jobOverdue(j))return 'delayed · investigate';if(j.status==='awaiting_verification')return 'Awaiting verification';if(j.status==='published'&&j.verification_status!=='verified')return 'Unverified published claim';if(j.status==='published')return 'Verified Published';return String(j.status||'unknown')}
+function jobDisplayStatus(j){if(j.status==='awaiting_verification')return 'Verification Pending';if(j.status==='published'&&j.verification_status!=='verified')return 'Verification Pending (legacy record)';if(jobOverdue(j))return 'delayed · investigate';if(j.status==='published')return 'Verified Published';return String(j.status||'unknown')}
 function jobStatusClass(j){return jobOverdue(j)||['failed','attention','error','upload_failed'].includes(j.status)?'red':j.status==='published'&&j.verification_status==='verified'?'green':''}
 function jobErrorPanel(j){
  const e=String(j.error||j.last_error||'').slice(0,1200);
  if(jobOverdue(j))return '<div class="detail-error"><strong>Publishing delayed</strong><p>This job is past its due time or processing has stalled. Check WordPress cron and Instagram before retrying; duplicate posts may result.</p><p>Scheduled: '+publishTime(j.scheduled_at)+' · Next attempt: '+publishTime(j.next_attempt_at)+' · Attempts: '+Number(j.attempts||0)+'</p></div>';
- if(!['failed','attention','error','upload_failed','awaiting_verification'].includes(j.status)&&!e&&!(j.status==='published'&&j.verification_status!=='verified'))return '';
+ if(['awaiting_verification','published'].includes(j.status)&&j.verification_status!=='verified')return '<div class="note"><strong>Publication verification pending</strong><p>WordPress has not independently confirmed this platform post. Do not publish it again until checked on Instagram/Facebook.</p></div>';
+ if(!['failed','attention','error','upload_failed'].includes(j.status)&&!e)return '';
  const guide=issueHelp(j);
  return '<div class="detail-error"><strong>Why was this post not published?</strong><p>'+esc(guide.cause)+'</p><p><b>What to do:</b> '+esc(guide.fix)+'</p><div class="line"></div><small>Platform / server error: '+esc(e||'No detailed error was provided by the server.')+'</small><small> · Code: '+esc(j.error_code||'Not provided')+'</small></div>';
 }
@@ -952,8 +1006,9 @@ function openJobEdit(id){
 function submitJobEdit(id){
  const j=(state.wpServerJobs||[]).find(x=>Number(x.id)===id);if(!j||j.status!=='scheduled')return toast('This job is no longer editable');
  const placement=document.getElementById('jobPlacement')?.value||'',account=document.getElementById('jobAccount')?.value||'',caption=document.getElementById('jobCaption')?.value||'',raw=document.getElementById('jobTime')?.value||'';
- const stamp=Date.parse(raw+':00+05:30'),when=Math.floor(stamp/1000);
- if(!Number.isFinite(when)||when<Date.now()/1000+120)return toast('Choose a future time at least two minutes ahead');
+ const [date,time]=raw.split('T'),validation=validScheduleIST(date,time);
+ if(!validation.ok)return toast(validation.message);
+ const when=validation.when;
  if(!account)return toast('Select a connected account');
  if(!confirm('Update this scheduled WordPress job?'))return;
  if(!window.PostFlowNative?.editWordPressJob)return toast('Updated Android app required');

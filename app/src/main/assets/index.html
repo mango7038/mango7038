@@ -206,7 +206,7 @@ function seedIndianDays(){
  save();route('events');toast(`${count} recurring fixed-date occasions added. Movable festivals need yearly verification.`)
 }
 function nextEvents(){let today=dateLocal();return [...state.events].map(e=>({...e,viewDate:e.repeat?(today.slice(0,4)+'-'+e.date.slice(5)<today?String(+today.slice(0,4)+1)+e.date.slice(4):today.slice(0,4)+e.date.slice(4)):e.date})).filter(e=>e.viewDate>=today).sort((a,b)=>a.viewDate.localeCompare(b.viewDate))}
-function calendarRender(el){let y=calMonth.getFullYear(),m=calMonth.getMonth(),start=(new Date(y,m,1).getDay()+6)%7,last=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate(),monthstr=calMonth.toLocaleDateString('en-IN',{month:'long',year:'numeric'});let cells='';for(let i=0;i<42;i++){let day=i-start+1,d=new Date(y,m,day),s=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,n=state.posts.filter(p=>p.date===s).length+state.events.filter(e=>e.date===s||(e.repeat&&e.date.slice(5)===s.slice(5))).length;cells+=`<button class="day ${day<1||day>last?'disabled':''} ${s===dateLocal()?'today':''} ${s===selectedDay?'selected':''}" onclick="selectDay('${s}')"><strong>${d.getDate()}</strong><small>${n?n+' ●':''}</small></button>`}el.innerHTML=`<h2>Content Calendar</h2><p class="sub">Scheduled posts, festivals, custom events and birthdays.</p><div class="card"><div class="monthnav"><button onclick="changeMonth(-1)">‹</button><b>${monthstr}</b><button onclick="changeMonth(1)">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(d=>`<div class="week">${d}</div>`).join('')}${cells}</div></div><div class="section"><h3>${selectedDay?fmt(selectedDay):'Select a date'}</h3><a onclick="editEvent()">Add Event +</a></div><div class="card">${selectedDay?([ ...state.posts.filter(p=>p.date===selectedDay).map(postItem),...state.events.filter(e=>e.date===selectedDay||(e.repeat&&e.date.slice(5)===selectedDay.slice(5))).map(eventItem)].join('')||'<div class="empty">Nothing planned on this date.</div>'):'<div class="empty">Tap any date to view or edit scheduled content.</div>'}</div>`}
+function calendarRender(el){let y=calMonth.getFullYear(),m=calMonth.getMonth(),start=(new Date(y,m,1).getDay()+6)%7,last=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate(),monthstr=calMonth.toLocaleDateString('en-IN',{month:'long',year:'numeric'});let cells='';for(let i=0;i<42;i++){let day=i-start+1,d=new Date(y,m,day),s=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,n=workspacePosts(state.posts).filter(p=>p.date===s).length+state.events.filter(e=>e.date===s||(e.repeat&&e.date.slice(5)===s.slice(5))).length;cells+=`<button class="day ${day<1||day>last?'disabled':''} ${s===dateLocal()?'today':''} ${s===selectedDay?'selected':''}" onclick="selectDay('${s}')"><strong>${d.getDate()}</strong><small>${n?n+' ●':''}</small></button>`}el.innerHTML=`<h2>Content Calendar</h2><p class="sub">Scheduled posts, festivals, custom events and birthdays.</p><div class="card"><div class="monthnav"><button onclick="changeMonth(-1)">‹</button><b>${monthstr}</b><button onclick="changeMonth(1)">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(d=>`<div class="week">${d}</div>`).join('')}${cells}</div></div><div class="section"><h3>${selectedDay?fmt(selectedDay):'Select a date'}</h3><a onclick="editEvent()">Add Event +</a></div><div class="card">${selectedDay?([ ...workspacePosts(state.posts).filter(p=>p.date===selectedDay).map(postItem),...state.events.filter(e=>e.date===selectedDay||(e.repeat&&e.date.slice(5)===selectedDay.slice(5))).map(eventItem)].join('')||'<div class="empty">Nothing planned on this date.</div>'):'<div class="empty">Tap any date to view or edit scheduled content.</div>'}</div>`}
 function changeMonth(d){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+d,1);render()}
 function selectDay(d){selectedDay=d;render()}
 function showModal(html){document.getElementById('overlay').innerHTML=`<div class="modal"><div class="sheet"><div class="sheet-head"><h3>${html.title}</h3><button class="x" onclick="closeModal()">×</button></div>${html.body}</div></div>`;document.body.classList.add('no-scroll')}
@@ -479,7 +479,7 @@ async function storePost(scheduleNow=false){
 }
 function setBulkMode(on){bulkMode=on;bulkSelected.clear();render()}
 function toggleBulk(id){if(bulkSelected.has(id))bulkSelected.delete(id);else bulkSelected.add(id);render()}
-function bulkSelectAll(){const ids=state.posts.map(p=>p.id);if(bulkSelected.size===ids.length)bulkSelected.clear();else ids.forEach(id=>bulkSelected.add(id));render()}
+function bulkSelectAll(){const ids=workspacePosts(state.posts).map(p=>p.id);if(bulkSelected.size===ids.length)bulkSelected.clear();else ids.forEach(id=>bulkSelected.add(id));render()}
 function bulkChangeStatus(status){if(!bulkSelected.size){toast('Select posts first');return}let count=0;state.posts.forEach(p=>{if(bulkSelected.has(p.id)){p.status=status;count++}});save();render();toast(count+' posts updated')}
 function bulkDelete(){if(!bulkSelected.size){toast('Select posts first');return}if(!confirm('Move '+bulkSelected.size+' selected posts to Recycle Bin?'))return;let removed=state.posts.filter(p=>bulkSelected.has(p.id));state.trash=state.trash||[];state.trash.unshift(...removed.map(p=>({...p,deletedAt:new Date().toISOString()})));state.posts=state.posts.filter(p=>!bulkSelected.has(p.id));save();bulkSelected.clear();render();toast(removed.length+' posts moved to Recycle Bin')}
 function bulkEdit(){if(!bulkSelected.size){toast('Select posts first');return}showModal({title:'Bulk Edit · '+bulkSelected.size+' Posts',body:`<p class="sub">Only filled fields will be applied to selected posts. Leave blank to keep original content.</p><div class="field"><label>Caption prefix (brand name / phone / logo text)</label><textarea id="bulkPrefix" placeholder="GraphicaNest • Call 9876543210"></textarea></div><div class="field"><label>Caption suffix / hashtags</label><textarea id="bulkSuffix" placeholder="#Brand #Festival"></textarea></div><div class="field"><label>Replace caption entirely (optional)</label><textarea id="bulkCaption" placeholder="New caption for all selected posts"></textarea></div><div class="field"><label>Date (optional)</label><input type="date" id="bulkDate"></div><div class="field"><label>Time (optional)</label><input type="time" id="bulkTime"></div><div class="field"><label>Status (optional)</label><select id="bulkStatus"><option value="">Keep existing</option><option value="draft">Draft</option><option value="paused">Paused</option><option value="scheduled">Scheduled</option></select></div><div class="note">This updates captions and scheduling metadata, not pixels inside the image. To add a graphical logo or phone number on the poster itself, use the individual media editor after image editing is implemented.</div>${btn('Apply to selected','applyBulkEdit()','full')}`})}
@@ -854,8 +854,8 @@ async function importZipAfterReview(){
    let captionWarnings=festivalMap?[...festivalMap.warnings]:captionMap?[...captionMap.dupes].map(x=>'Duplicate caption header: '+x):[];
    const toSubmit=[];let queued=0;
    const nameCounts=new Map();entries.forEach(e=>{const name=safeFileName(e.name);nameCounts.set(name,(nameCounts.get(name)||0)+1)});
-   let seen=new Set(state.posts.map(p=>p.fingerprint).filter(Boolean));
-   let times=new Set(state.posts.filter(p=>p.status==='scheduled').map(p=>p.date+'|'+p.time));
+   let seen=new Set(workspacePosts(state.posts).map(p=>p.fingerprint).filter(Boolean));
+   let times=new Set(workspacePosts(state.posts).filter(p=>p.status==='scheduled').map(p=>p.date+'|'+p.time));
    for(let f of entries){
      if((f._data?.uncompressedSize||0)>100*1024*1024){skipped++;continue}
      let bytes=await f.async('uint8array');if(bytes.length>100*1024*1024){skipped++;continue}
@@ -973,18 +973,18 @@ function submitPublishPost(id){
    return;
  }
  const err=document.getElementById('publishTimeError');if(err)err.style.display='none';
- const accounts=(state.wpAccounts||[]).filter(x=>x.platform==='facebook'||x.platform==='instagram');
+ const accounts=(state.wpAccounts||[]).filter(x=>(x.platform==='facebook'||x.platform==='instagram')&&(!activeWorkspace()||accountKey(x)===state.activeWorkspace));
  const selected=accounts.flatMap((a,i)=>{const placement=document.getElementById('pub_'+i)?.value;return placement?[{a,placement}]:[]});
- if(!selected.length)return toast('Select at least one destination');
+ if(!selected.length)return toast('Select at least one destination in the active workspace');
  if(Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.serverId&&['scheduled','processing','published','attention'].includes(j.status)))return toast('A server job already exists. Check its status before uploading again.');
  if(!confirm('Schedule '+selected.length+' publishing job(s) on WordPress for '+date+' '+time+' IST?'))return;
  state.wpPendingJobs=state.wpPendingJobs||{};
  selected.forEach(({a,placement})=>{
   const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');
-  state.wpPendingJobs[key]={title:p.title,postId:p.id,account:a.name,placement,status:'uploading',scheduled_at:at};
+  state.wpPendingJobs[key]={title:p.title,postId:p.id,account:a.name,external_id:String(a.external_id),platform:a.platform,placement,status:'uploading',scheduled_at:at};
   if(placement==='carousel')PostFlowNative.queueWordPressCarousel(JSON.stringify(p.mediaIds),key,a.platform,a.external_id,p.caption||'',at);else PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
  });
- p.date=date;p.time=time;save();closeModal();route('accounts');toast('Uploading jobs; check Publishing Jobs for results');
+ p.date=date;p.time=time;p.workspaces=[...new Set([...(p.workspaces||[]),...selected.map(x=>accountKey(x.a))])];save();closeModal();route('accounts');toast('Uploading jobs; check Publishing Jobs for results');
 }
 let silentJobsRefresh=false;
 function refreshPublishJobs(silent=false){
@@ -1030,7 +1030,7 @@ function jobErrorPanel(j){
  return '<div class="detail-error"><strong>Why was this post not published?</strong><p>'+esc(guide.cause)+'</p><p><b>What to do:</b> '+esc(guide.fix)+'</p><div class="line"></div><small>Platform / server error: '+esc(e||'No detailed error was provided by the server.')+'</small><small> · Code: '+esc(j.error_code||'Not provided')+'</small></div>';
 }
 function showPublishJobs(){
- const jobs=(state.wpServerJobs||[]).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.platform)+' · '+esc(j.placement)+'</b><span class="tag '+jobStatusClass(j)+'">'+esc(jobDisplayStatus(j))+'</span><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Issue: '+esc(String(j.error).slice(0,110))+'</small>':'')+'</div><span class="rowbtn">Details ›</span></div>').join('');
+ const jobs=(state.wpServerJobs||[]).filter(j=>!activeWorkspace()||(j.platform==='instagram'&&String(j.external_id)===String(activeWorkspace().external_id))).map(j=>'<div class="item" onclick="showJobDetail('+Number(j.id)+')"><div class="body"><b>'+esc(j.account_name||j.external_id||j.platform)+' · '+esc(j.placement)+'</b><span class="tag '+jobStatusClass(j)+'">'+esc(jobDisplayStatus(j))+'</span><small>Scheduled: '+publishTime(j.scheduled_at)+'</small><small>Published: '+publishTime(j.published_at,j.status)+'</small>'+(j.error?'<small>Issue: '+esc(String(j.error).slice(0,110))+'</small>':'')+'</div><span class="rowbtn">Details ›</span></div>').join('');
  showModal({title:'Publishing Center',body:'<p class="sub">Live server results. Publishing and local reminders are separate.</p>'+(jobs||'<div class="empty">No server jobs yet</div>')+btn('Refresh','closeModal();refreshPublishJobs()','full')});
 }
 function dateTimeLocalIST(unix){if(!unix)return '';const d=new Date((unix+19800)*1000);return d.toISOString().slice(0,16)}

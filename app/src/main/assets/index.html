@@ -923,7 +923,7 @@ function saveSettings(){let t=document.getElementById('prefTime').value;if(!t)re
  save();toast('All preferences saved. Android reminders updated.')}
 
 function openPublishPost(id){
- const p=state.posts.find(x=>x.id===id),accounts=(state.wpAccounts||[]).filter(x=>x.platform==='facebook'||x.platform==='instagram');
+ const p=state.posts.find(x=>x.id===id),accounts=(state.wpAccounts||[]).filter(x=>(x.platform==='facebook'||x.platform==='instagram')&&(!activeWorkspace()||accountKey(x)===state.activeWorkspace));
  if(!p?.mediaId)return toast('Attach and save media first');
  if(!accounts.length)return toast('Sync Facebook and Instagram first');
  if(!window.PostFlowNative?.queueWordPressPost||(p.kind==='carousel'&&!window.PostFlowNative?.queueWordPressCarousel))return toast('New Android build required');
@@ -977,7 +977,7 @@ function submitPublishPost(id){
  const selected=accounts.flatMap((a,i)=>{const placement=document.getElementById('pub_'+i)?.value;return placement?[{a,placement}]:[]});
  if(!selected.length)return toast('Select at least one destination in the active workspace');
  if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('That account already has a publishing job for this post.');
- if(Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.serverId&&['scheduled','processing','published','attention'].includes(j.status)))return toast('A server job already exists. Check its status before uploading again.');
+ if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.external_id===String(a.external_id)&&j.placement===placement&&j.serverId&&['scheduled','processing','published','attention'].includes(j.status))))return toast('That account already has a server job. Check its status first.');
  if(!confirm('Schedule '+selected.length+' publishing job(s) on WordPress for '+date+' '+time+' IST?'))return;
  state.wpPendingJobs=state.wpPendingJobs||{};
  selected.forEach(({a,placement})=>{

@@ -279,8 +279,14 @@ function useCaptionTemplate(id){
 }
 function showComposerTemplates(){
  const templates=(state.captionTemplates||[]).filter(t=>!t.workspace||!activeWorkspace()||t.workspace===state.activeWorkspace);
- showModal({title:'Caption Templates',body:'<p class="sub">Brand-wise templates support {brand}, {title}, {location}.</p>'+
- (templates.map(t=>'<div class="item"><div class="body"><b>'+esc(t.title)+'</b><small>'+esc(t.text.slice(0,130))+'</small></div><button class="rowbtn" onclick="useCaptionTemplate('+JSON.stringify(t.id)+')">Use</button></div>').join('')||'<div class="empty">No caption templates saved</div>')});
+ if(!templates.length)return toast('Save a caption template in More → Advanced tools first.');
+ const choices=templates.map((t,i)=>(i+1)+'. '+t.title).join('\n');
+ const choice=window.prompt('Choose a template number:\n'+choices);
+ if(choice===null)return;
+ const item=templates[Number(choice)-1];if(!item)return toast('Invalid template number.');
+ const area=document.getElementById('pCaption');if(!area)return toast('Open post editor first');
+ area.value=captionForBrand(item.text,document.getElementById('pTitle')?.value||'');
+ toast('Caption applied. Review it before scheduling.');
 }
 function openMenu(){
  const main=[['home','⌂ Home'],['queue','▤ My Posts'],['calendar','▦ Calendar'],['library','▧ Content Library'],['accounts','◎ Connected Accounts'],['settings','⚙ Settings']];
@@ -371,7 +377,7 @@ function changeMonth(d){calMonth=new Date(calMonth.getFullYear(),calMonth.getMon
 function selectDay(d){selectedDay=d;render()}
 function showModal(html){document.getElementById('overlay').innerHTML=`<div class="modal"><div class="sheet"><div class="sheet-head"><h3>${html.title}</h3><button class="x" onclick="closeModal()">×</button></div>${html.body}</div></div>`;document.body.classList.add('no-scroll')}
 function closeModal(){if(typeof carouselPreviewUrls!=='undefined'){carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];}document.getElementById('overlay').innerHTML='';document.body.classList.remove('no-scroll')}
-function compose(){editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];editPost(null)}
+function compose(){editedPosterFile=null;clearSelectedMediaSnapshot();posterPendingLayers=null;pendingCarouselFiles=[];editPost(null)}
 function placementsForAccount(a){let platform=a.platform;
  if(platform==='Instagram')return DEST.filter(x=>x[0].startsWith('ig_'));
  if(platform==='Facebook Pages')return DEST.filter(x=>x[0].startsWith('fb_'));
@@ -379,6 +385,7 @@ function placementsForAccount(a){let platform=a.platform;
  return [];
 }
 function editPost(id){
+  clearSelectedMediaSnapshot();
   let p=id?state.posts.find(x=>x.id===id):null;editing=id;
   let d=p?{...p}:{title:'',caption:'',date:tenMinutesIST().date,time:tenMinutesIST().time,kind:'image',targets:[...state.settings.defaultTargets],accountTargets:{},wpSelected:activeWorkspace()?[activeWorkspace().platform+'_'+activeWorkspace().external_id+':feed']:[],workspaces:activeWorkspace()?[accountKey(activeWorkspace())]:[],status:'draft',thumb:'',mediaId:null};
   const acct=state.accounts.length?`<div class="section"><h3>Account-specific Destinations</h3></div><p class="sub">Select Feed or Story separately for each account, independent of other accounts. Local reminders only until API connection.</p>${state.accounts.map(a=>`<div class="card" style="margin:9px 0"><b>${esc(a.name)}</b><p class="sub">${esc(a.platform)}</p>${placementsForAccount(a).map(([key,label])=>`<div class="check"><input type="checkbox" id="account_${a.id}_${key}" ${((d.accountTargets||{})[a.id]||[]).includes(key)?'checked':''}><label for="account_${a.id}_${key}">${label}</label></div>`).join('')}</div>`).join('')}`:'';
@@ -388,7 +395,7 @@ function editPost(id){
   <div class="field"><label>Caption</label><textarea id="pCaption" placeholder="Write a caption...">${esc(d.caption)}</textarea></div>
   <div class="actions">${btn('Generate SEO Caption','suggestCaption()','mini secondary')}${btn('Use Brand Template','showComposerTemplates()','mini secondary')}</div>
   </div><div class="composer-stage" data-stage="2" hidden><div class="section"><h3>Poster Preview & Editor</h3></div>
-  <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
+  <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div id="mediaQualityInfo" class="note">Select a poster to inspect file size, dimensions and aspect ratio.</div><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
   <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onchange="previewSelectedPostMedia()"></div><div class="field"><label>Select 1–10 photos (1 = single post; 2–10 = carousel)</label><input id="pCarousel" type="file" accept="image/jpeg,image/png" multiple onchange="previewCarouselMedia()"><small id="carouselSelected">Existing carousel: ${(d.mediaIds||[]).length} images. JPG/PNG only.</small></div>
   ${p&&p.mediaId?`<div class="note">Attached media is saved locally (${esc(p.mediaName||'Original file')}). Changing media is optional.</div>`:''}
   <div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><small>Carousel exports JPEG files at 1080×1350 (4:5) or 1080×1080 (1:1) when saved. Original images are never overwritten. Other media exports are unchanged.</small></div></div><div class="composer-stage" data-stage="3" hidden><div class="layout-actions"><div class="field"><label>Date</label><input id="pDate" type="date" value="${esc(d.date)}"></div><div class="field"><label>Time (IST)</label><input id="pTime" type="time" value="${esc(d.time)}"></div></div>
@@ -507,7 +514,37 @@ function renderCarouselSelected(){
  if(n){const hero=document.getElementById('postLargePreview');if(hero&&carouselPreviewUrls[0]){hero.src=carouselPreviewUrls[0];hero.style.display='block';}}
 }
 
-function previewSelectedPostMedia(){const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');editedPosterFile=null;if(file){pendingCarouselFiles=[];document.getElementById('pKind').value=file.type.startsWith('video/')?'reel':'image';}if(!file||!file.type.startsWith('image/'))return;const reader=new FileReader();reader.onload=()=>{preview.src=reader.result;preview.style.display='block'};reader.readAsDataURL(file)}
+let selectedMediaSnapshot=null,selectedMediaPromise=null,selectedMediaVersion=0;
+function clearSelectedMediaSnapshot(){selectedMediaVersion++;selectedMediaSnapshot=null;selectedMediaPromise=null;}
+function previewSelectedPostMedia(){
+ const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');
+ editedPosterFile=null;clearSelectedMediaSnapshot();
+ if(!file)return;
+ pendingCarouselFiles=[];
+ document.getElementById('pKind').value=file.type.startsWith('video/')?'reel':'image';
+ const version=selectedMediaVersion;
+ selectedMediaPromise=(async()=>{
+  if(file.size>100*1024*1024)throw Error('Media exceeds 100 MB limit');
+  if(!/^(image\/(jpeg|png|webp)|video\/(mp4|quicktime))$/i.test(file.type))throw Error('Unsupported media type. Use JPEG, PNG, WebP or MP4.');
+  // Snapshot bytes as soon as picker returns; avoid a later read from an expired Android gallery URI.
+  const bytes=await file.arrayBuffer();
+  if(version!==selectedMediaVersion)return null;
+  selectedMediaSnapshot={bytes,name:file.name,type:file.type,size:file.size};
+  const label=document.getElementById('mediaQualityInfo');
+  if(label)label.textContent='Media ready · '+(file.size/1048576).toFixed(1)+' MB · '+(file.type.startsWith('video/')?'Video':'Image');
+  return selectedMediaSnapshot;
+ })().catch(err=>{if(version===selectedMediaVersion){const label=document.getElementById('mediaQualityInfo');if(label)label.textContent='Media error: '+(err.message||err);toast('Cannot read selected media. Try Files or Downloads.')}return null});
+ if(!file.type.startsWith('image/'))return;
+ const reader=new FileReader();
+ reader.onload=()=>{if(version!==selectedMediaVersion)return;preview.src=reader.result;preview.style.display='block';const image=new Image();image.onload=()=>{
+  if(version!==selectedMediaVersion)return;
+  const ratio=image.width/image.height,label=document.getElementById('mediaQualityInfo');
+  const suitable=Math.abs(ratio-9/16)<.035||Math.abs(ratio-1)<.035||Math.abs(ratio-4/5)<.035;
+  if(label)label.textContent=image.width+' × '+image.height+' px · '+(file.size/1048576).toFixed(1)+' MB'+(suitable?' · Standard social aspect':' · Crop may be required');
+ };image.src=reader.result;};
+ reader.onerror=()=>toast('Preview could not read this image. Select from Downloads.');
+ reader.readAsDataURL(file);
+}
 async function posterImageBlob(){
  if(editedPosterFile)return editedPosterFile;
  const f=document.getElementById('pMedia')?.files?.[0];if(f&&f.type.startsWith('image/'))return f;
@@ -619,11 +656,12 @@ async function storePost(scheduleNow=false){
     }
   }
   let file=carouselFiles.length>1?null:(editedPosterFile||document.getElementById('pMedia').files[0]);
+  if(!editedPosterFile&&file&&selectedMediaPromise){const captured=await selectedMediaPromise;if(!captured)throw Error('Gallery file access expired. Re-select media from Files / Downloads.');}
   if(post.kind==='carousel'&&(!post.mediaIds||post.mediaIds.length<2)){toast('Attach 2–10 carousel images');return}
   if(post.kind!=='carousel'&&carouselFiles.length<2)post.mediaIds=[];
   if(file){
     if(file.size>100*1024*1024){toast('Single file limit: 100 MB');return}
-    const bytes=new Uint8Array(await file.arrayBuffer());
+    const bytes=new Uint8Array(!editedPosterFile&&selectedMediaSnapshot?.name===file.name&&selectedMediaSnapshot?.size===file.size?selectedMediaSnapshot.bytes:await file.arrayBuffer());
     const mediaId=uid().replace(/[^a-zA-Z0-9_-]/g,'');
     if(!await persistMedia(mediaId,file.name,bytes)){toast('Media could not be saved; post not updated');return}
     post.mediaId=mediaId;post.mediaName=file.name;
@@ -633,7 +671,7 @@ async function storePost(scheduleNow=false){
   if(editing)state.posts=state.posts.map(x=>x.id===editing?post:x);else state.posts.push(post);
   if(!save()){if(!editing)state.posts.pop();return}
   (old.mediaIds?.length?old.mediaIds:[old.mediaId]).filter(Boolean).forEach(id=>{if(!(post.mediaIds||[]).includes(id)&&post.mediaId!==id&&post.sourceMediaId!==id&&!state.posts.some(x=>x.id!==post.id&&(x.mediaId===id||(x.mediaIds||[]).includes(id)||x.sourceMediaId===id)))cleanupMedia(id)});
-  editedPosterFile=null;posterPendingLayers=null;pendingCarouselFiles=[];carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];closeModal();route('queue');
+  editedPosterFile=null;clearSelectedMediaSnapshot();posterPendingLayers=null;pendingCarouselFiles=[];carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];closeModal();route('queue');
   if(scheduleNow){submitDirectWordPress(post,selectedWP);toast('Uploading to WordPress. Check Publishing Center for confirmation.');}else toast('Draft saved locally.');
   }catch(e){console.error('Post scheduling error',e);toast('Scheduling error: '+String(e.message||e).slice(0,110));}finally{if(scheduleNow)setScheduleBusy(false)}
 }

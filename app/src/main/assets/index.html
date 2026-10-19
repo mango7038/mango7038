@@ -202,7 +202,7 @@ function editPost(id){
   <div class="field"><label>Content Type</label><select id="pKind"><option value="image" ${d.kind==='image'?'selected':''}>Photo / Poster</option><option value="reel" ${d.kind==='reel'?'selected':''}>Reel / Video</option><option value="carousel" ${d.kind==='carousel'?'selected':''}>Carousel (2–10 images)</option></select></div>
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
-  ${acct}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
+  ${acct}<div class="section"><h3>Connected WordPress Profiles</h3></div><p class="sub">Select the exact connected profile and placement. This selection is used once for scheduling.</p>${(state.wpAccounts||[]).filter(a=>['instagram','facebook'].includes(a.platform)).map(a=>{const key=String(a.platform)+'_'+String(a.external_id);const options=a.platform==='instagram'?[['feed','Feed'],['story','Story']]:[['feed','Feed'],['story','Story']];return `<div class="card"><b>${esc(a.name)}</b><p class="sub">${esc(a.platform)}</p>${options.map(([kind,label])=>`<div class="check"><input type="checkbox" data-wp-destination="1" data-platform="${esc(a.platform)}" data-external="${esc(a.external_id)}" data-placement="${kind}" ${((d.wpSelected||[]).includes(key+':'+kind))?'checked':''}><label>${label}</label></div>`).join('')}</div>`}).join('')}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
   <div class="card"><b>Ready to Schedule</b><p class="sub">Your Step 4 destinations are used automatically. No need to select accounts again.</p><div id="reviewDestinations" class="note">Review your destinations.</div><div class="field"><label>Publishing date (IST)</label><input id="reviewDate" type="date" value="${esc(d.date)}" oninput="syncReviewSchedule()"></div><div class="field"><label>Publishing time (IST)</label><input id="reviewTime" type="time" value="${esc(d.time)}" oninput="syncReviewSchedule()"></div><div class="actions">${btn('+2 min','setReviewOffset(2)','mini secondary')}${btn('+10 min','setReviewOffset(10)','mini secondary')}${btn('+100 min','setReviewOffset(100)','mini secondary')}</div><div id="reviewTimeError" class="detail-error" style="display:none" role="alert"></div><small>WordPress requires a future time. Select at least two minutes ahead.</small></div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
   <div class="line"></div><div class="note">Schedule Post uses your already selected Step 4 destinations. WordPress acceptance confirms the job; draft saves only on this device.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
   const steps=[...document.querySelectorAll('#overlay .composer-stage')];
@@ -223,19 +223,19 @@ function composerWordPressDestinations(){
  const chosen=[];
  const carousel=pendingCarouselFiles.length>1||(pendingCarouselFiles.length===0&&document.getElementById('pKind')?.value==='carousel');
  const reel=!carousel&&document.getElementById('pKind')?.value==='reel';
- for(const account of accounts){
-   const platform=account.platform;
-   const feed=document.getElementById('tar_'+(platform==='facebook'?'fb_feed':'ig_feed'))?.checked;
-   const story=document.getElementById('tar_'+(platform==='facebook'?'fb_story':'ig_story'))?.checked;
-   if(feed)chosen.push({a:account,placement:carousel?'carousel':reel?'reel':'feed'});
-   if(story&&!carousel)chosen.push({a:account,placement:'story'});
+ const checks=[...document.querySelectorAll('#overlay input[data-wp-destination]')];
+ for(const el of checks.filter(x=>x.checked)){
+  const account=accounts.find(a=>a.platform===el.dataset.platform&&String(a.external_id)===el.dataset.external);
+  if(!account)continue;
+  if(el.dataset.placement==='story'){if(!carousel)chosen.push({a:account,placement:'story'});}
+  else chosen.push({a:account,placement:carousel?'carousel':reel?'reel':'feed'});
  }
  return chosen;
 }
 function updateReviewDestinations(){
  const display=document.getElementById('reviewDestinations');if(!display)return;
  const found=composerWordPressDestinations();
- display.innerHTML=found.length?found.map(x=>'<div>✓ '+esc(x.a.name)+' · '+esc(x.placement)+'</div>').join(''):'<b>No eligible WordPress accounts selected.</b> Go back to Accounts and select Instagram/Facebook Feed or Story.';
+ display.innerHTML=found.length?found.map(x=>'<div>✓ '+esc(x.a.name)+' · '+esc(x.placement)+'</div>').join(''):'<b>No connected WordPress profile selected.</b> Go back to Step 2 and select your exact Instagram/Facebook profile and Feed or Story.';
  const manual=DEST.filter(([key])=>!['ig_feed','ig_story','fb_feed','fb_story'].includes(key)&&document.getElementById('tar_'+key)?.checked).map(([,name])=>name);
  if(manual.length)display.innerHTML+='<small>Manual or pending integrations (not sent to WordPress): '+esc(manual.join(', '))+'</small>';
 }
@@ -391,6 +391,7 @@ async function storePost(scheduleNow=false){
 
   if(scheduleNow)setScheduleBusy(true);
   try{
+  const selectedIds=selectedWP.map(({a,placement})=>a.platform+'_'+a.external_id+':'+(placement==='carousel'||placement==='reel'?'feed':placement));
   const title=document.getElementById('pTitle').value.trim(),date=document.getElementById('pDate').value,time=document.getElementById('pTime').value,status=document.getElementById('pStatus').value;
   const targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('tar_'+k).checked);
   if(!title||!date||!time){toast('Title, date and time required');return}
@@ -398,7 +399,7 @@ async function storePost(scheduleNow=false){
   if(!scheduleNow&&status==='scheduled'&&!targets.length){toast('Select destinations or save as Draft');return}
   let old=state.posts.find(x=>x.id===editing)||{},id=editing||uid();
   let accountTargets={};state.accounts.forEach(a=>{let destinations=placementsForAccount(a).map(x=>x[0]).filter(k=>document.getElementById('account_'+a.id+'_'+k)?.checked);if(destinations.length)accountTargets[a.id]=destinations});
-  let post={...old,id,title,date,time,status:scheduleNow?'uploading': 'draft',targets,accountTargets,captionApproved:true,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
+  let post={...old,id,title,date,time,status:scheduleNow?'uploading': 'draft',targets,accountTargets,wpSelected:selectedIds,captionApproved:true,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
   const carouselFiles=[...pendingCarouselFiles];
   if(carouselFiles.length){
     if(carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select up to 10 JPG/PNG images');return}

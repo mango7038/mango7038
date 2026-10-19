@@ -87,7 +87,8 @@ function validScheduleIST(date,time,minLeadSeconds=120){
  return {ok:true,when};
 }
 function setReviewOffset(minutes){
- const d=new Date(Date.now()+minutes*60000+330*60000).toISOString();
+ const deadline=Math.ceil((Date.now()+minutes*60000+3000)/60000)*60000;
+ const d=new Date(deadline+330*60000).toISOString();
  const date=document.getElementById('reviewDate'),time=document.getElementById('reviewTime');
  if(date)date.value=d.slice(0,10);if(time)time.value=d.slice(11,16);syncReviewSchedule();
 }
@@ -96,7 +97,8 @@ function localPublishingJobs(post){
 }
 function postTrackingState(post){
  const jobs=localPublishingJobs(post);
- const serverJobs=(state.wpServerJobs||[]).filter(j=>jobs.some(k=>Number(k.serverId||0)===Number(j.id))||(j.client_job_id&&jobs.some(k=>k.clientId===j.client_job_id)));
+ const localIds=Object.entries(state.wpPendingJobs||{}).filter(([,v])=>v.postId===post.id).map(([key])=>key);
+ const serverJobs=(state.wpServerJobs||[]).filter(j=>jobs.some(k=>Number(k.serverId||0)===Number(j.id))||(j.client_job_id&&localIds.includes(String(j.client_job_id))));
  if(!jobs.length)return null;
  if(serverJobs.some(j=>j.status==='published'&&j.verification_status==='verified'))return 'published';
  if(serverJobs.some(j=>j.status==='awaiting_verification'||(j.status==='published'&&j.verification_status!=='verified')))return 'verification';
@@ -202,7 +204,7 @@ function editPost(id){
   <div class="field"><label>Content Type</label><select id="pKind"><option value="image" ${d.kind==='image'?'selected':''}>Photo / Poster</option><option value="reel" ${d.kind==='reel'?'selected':''}>Reel / Video</option><option value="carousel" ${d.kind==='carousel'?'selected':''}>Carousel (2–10 images)</option></select></div>
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
-  ${acct}<div class="section"><h3>Connected WordPress Profiles</h3></div><p class="sub">Select the exact connected profile and placement. This selection is used once for scheduling.</p>${(state.wpAccounts||[]).filter(a=>['instagram','facebook'].includes(a.platform)).map(a=>{const key=String(a.platform)+'_'+String(a.external_id);const options=a.platform==='instagram'?[['feed','Feed'],['story','Story']]:[['feed','Feed'],['story','Story']];return `<div class="card"><b>${esc(a.name)}</b><p class="sub">${esc(a.platform)}</p>${options.map(([kind,label])=>`<div class="check"><input type="checkbox" data-wp-destination="1" data-platform="${esc(a.platform)}" data-external="${esc(a.external_id)}" data-placement="${kind}" ${((d.wpSelected||[]).includes(key+':'+kind))?'checked':''}><label>${label}</label></div>`).join('')}</div>`}).join('')}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
+  ${acct}<div class="section"><h3>Connected WordPress Profiles</h3></div><p class="sub">Select the exact connected profile and placement. This selection is used once for scheduling.</p>${(state.wpAccounts||[]).filter(a=>['instagram','facebook'].includes(a.platform)).map(a=>{const key=String(a.platform)+'_'+String(a.external_id);const options=a.platform==='instagram'?[['feed','Feed'],['story','Story']]:[['feed','Feed'],['story','Story']];return `<div class="card"><b>${esc(a.name)}</b><p class="sub">${esc(a.platform)}</p>${options.map(([kind,label])=>`<div class="check"><input type="checkbox" data-wp-destination="1" data-platform="${esc(a.platform)}" data-external="${esc(a.external_id)}" data-placement="${kind}" ${((d.wpSelected||[]).includes(key+':'+kind)||(!(d.wpSelected||[]).length&&(d.targets||[]).includes((a.platform==='instagram'?'ig_':'fb_')+kind)&&(state.wpAccounts||[]).filter(x=>x.platform===a.platform).length===1))?'checked':''}><label>${label}</label></div>`).join('')}</div>`}).join('')}</div><div class="composer-stage" data-stage="5" hidden><input type="hidden" id="pStatus" value="draft">
   <div class="card"><b>Ready to Schedule</b><p class="sub">Your Step 4 destinations are used automatically. No need to select accounts again.</p><div id="reviewDestinations" class="note">Review your destinations.</div><div class="field"><label>Publishing date (IST)</label><input id="reviewDate" type="date" value="${esc(d.date)}" oninput="syncReviewSchedule()"></div><div class="field"><label>Publishing time (IST)</label><input id="reviewTime" type="time" value="${esc(d.time)}" oninput="syncReviewSchedule()"></div><div class="actions">${btn('+2 min','setReviewOffset(2)','mini secondary')}${btn('+10 min','setReviewOffset(10)','mini secondary')}${btn('+100 min','setReviewOffset(100)','mini secondary')}</div><div id="reviewTimeError" class="detail-error" style="display:none" role="alert"></div><small>WordPress requires a future time. Select at least two minutes ahead.</small></div><div class="actions">${btn('Schedule Post','storePost(true)','')}${btn('Save as Draft','storePost(false)','secondary')}${p&&!hasActiveServerJobs(p.id)?btn('Cancel Local Schedule',`cancelLocalSchedule('${p.id}')`,'secondary'):''}${p?btn('Publish via WordPress',`openPublishPost('${p.id}')`):''}${p?btn('Share Media + Caption',`whatsApp('${p.id}')`):''}${p?btn('Delete',`deletePost('${p.id}')`):''}</div>
   <div class="line"></div><div class="note">Schedule Post uses your already selected Step 4 destinations. WordPress acceptance confirms the job; draft saves only on this device.</div></div><div class="wizard-actions"><button class="btn secondary" id="wizBack" onclick="moveComposer(-1)" disabled>Back</button><button class="btn" id="wizNext" onclick="moveComposer(1)">Next →</button></div>`});
   const steps=[...document.querySelectorAll('#overlay .composer-stage')];
@@ -950,16 +952,18 @@ function submitPublishPost(id){
  });
  p.date=date;p.time=time;save();closeModal();route('accounts');toast('Uploading jobs; check Publishing Jobs for results');
 }
-function refreshPublishJobs(){
- if(!window.PostFlowNative?.getWordPressJobs)return toast('New Android build required');
- PostFlowNative.getWordPressJobs();toast('Fetching publishing status');
+let silentJobsRefresh=false;
+function refreshPublishJobs(silent=false){
+ if(!window.PostFlowNative?.getWordPressJobs){if(!silent)toast('New Android build required');return;}
+ silentJobsRefresh=!!silent;
+ PostFlowNative.getWordPressJobs();if(!silent)toast('Fetching publishing status');
 }
 window.onPostFlowPublish=function(raw){
  try{
   const r=JSON.parse(raw);
   if(r.mutation){if(r.ok&&r.job){state.wpServerJobs=(state.wpServerJobs||[]).map(j=>Number(j.id)===Number(r.job_id)?r.job:j);for(const local of Object.values(state.wpPendingJobs||{})){if(Number(local.serverId)===Number(r.job_id)){local.status=r.job.status;local.scheduled_at=r.job.scheduled_at;local.error=r.job.error||'';}}save();toast(r.mutation==='DELETE'?'Scheduled job cancelled on WordPress':'WordPress job updated');showJobDetail(Number(r.job_id));}else{toast(r.error||'Update was rejected');showJobDetail(Number(r.job_id));}return;}
   if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';if(j.postId){const p=state.posts.find(x=>x.id===j.postId);if(p){const others=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===j.postId);p.status=others.every(x=>x.status==='upload_failed')?'draft':others.some(x=>x.status==='uploading')?'uploading':'scheduled';}}}reconcileServerJobs();save();toast(r.ok?'WordPress accepted the publishing job':r.error||'Upload failed');if(page==='accounts')render();}
-  else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();showPublishJobs();}
+  else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();if(silentJobsRefresh){silentJobsRefresh=false;if(['home','queue','library'].includes(page))render();}else showPublishJobs();}
   else if(r.error)toast(r.error);
  }catch(e){toast('Unexpected publishing response');}
 };
@@ -1051,5 +1055,5 @@ function exportJsonBackup(){let blob=new Blob([JSON.stringify({version:3,exporte
 function importBackup(){showModal({title:'Restore JSON Backup',body:`<div class="note">Restoring replaces current posts/events. JSON file does NOT contain original media.</div><div class="field"><input type="file" id="backupFile" accept=".json,application/json"></div>${btn('Restore JSON','restoreBackup()','full')}`})}
 async function restoreBackup(){let f=document.getElementById('backupFile').files[0];if(!f)return;if(!confirm('Replace all existing local data?'))return;try{let a=JSON.parse(await f.text());if(!a.state||!Array.isArray(a.state.posts)||!Array.isArray(a.state.events))throw Error('Invalid backup');state={...JSON.parse(JSON.stringify(defaultStore)),...a.state};save();closeModal();route('home');toast('Metadata restored')}catch(e){toast('Invalid backup file')}}
 window.applyNativeRestoredState=function(json){try{let restored=JSON.parse(json);if(!Array.isArray(restored.posts)||!Array.isArray(restored.events))throw Error('Invalid data');state={...JSON.parse(JSON.stringify(defaultStore)),...restored};save();closeModal();route('home');toast('Posts, events and full media backup restored')}catch(e){toast('Restore display error')}};
-render();if(window.PostFlowNative&&PostFlowNative.syncState){try{PostFlowNative.syncState(JSON.stringify(state))}catch(e){}}setTimeout(showWordPressWelcome,450);setTimeout(()=>{let upcoming=nextEvents().filter(e=>e.viewDate===dateLocal());if(upcoming.length&&state.settings.notifications)toast('Today: '+upcoming.map(e=>e.title).slice(0,2).join(', '));else notifyDue()},700);
+render();setTimeout(()=>{if(hasWordPressPair())refreshPublishJobs(true)},3200);setInterval(()=>{if(hasWordPressPair()&&!document.hidden)refreshPublishJobs(true)},120000);if(window.PostFlowNative&&PostFlowNative.syncState){try{PostFlowNative.syncState(JSON.stringify(state))}catch(e){}}setTimeout(showWordPressWelcome,450);setTimeout(()=>{let upcoming=nextEvents().filter(e=>e.viewDate===dateLocal());if(upcoming.length&&state.settings.notifications)toast('Today: '+upcoming.map(e=>e.title).slice(0,2).join(', '));else notifyDue()},700);
 </script></body></html>

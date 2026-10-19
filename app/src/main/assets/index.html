@@ -563,36 +563,59 @@ function renderCarouselSelected(){
  if(n){const hero=document.getElementById('postLargePreview');if(hero&&carouselPreviewUrls[0]){hero.src=carouselPreviewUrls[0];hero.style.display='block';}}
 }
 
-let selectedMediaSnapshot=null,selectedMediaPromise=null,selectedMediaVersion=0;
-function clearSelectedMediaSnapshot(){selectedMediaVersion++;selectedMediaSnapshot=null;selectedMediaPromise=null;}
+let selectedMediaSnapshot=null,selectedMediaPromise=null,selectedMediaVersion=0,selectedMediaPreviewUrl=null;
+function clearSelectedMediaSnapshot(){
+ selectedMediaVersion++;selectedMediaSnapshot=null;selectedMediaPromise=null;
+ if(selectedMediaPreviewUrl){URL.revokeObjectURL(selectedMediaPreviewUrl);selectedMediaPreviewUrl=null;}
+}
+function mediaPreflightMessage(m){
+ if(!m)return 'No image or video ready.';
+ const details=[(m.size/1048576).toFixed(1)+' MB',m.type.replace('image/','').replace('video/','').toUpperCase()];
+ if(m.width&&m.height){
+  details.unshift(m.width+' × '+m.height+' px');
+  const r=m.width/m.height;
+  if(m.width<320||m.height<320)details.push('⚠ Resolution too low for reliable Instagram publishing');
+  else if(Math.abs(r-9/16)<.04||Math.abs(r-1)<.04||Math.abs(r-4/5)<.04)details.push('✓ Standard social aspect');
+  else details.push('⚠ Nonstandard aspect — review crop');
+ }
+ if(Number.isFinite(m.duration)&&m.duration>0)details.push(Math.round(m.duration)+' sec');
+ return details.join(' · ');
+}
 function previewSelectedPostMedia(){
  const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');
  editedPosterFile=null;clearSelectedMediaSnapshot();
  if(!file)return;
  pendingCarouselFiles=[];
- document.getElementById('pKind').value=file.type.startsWith('video/')?'reel':'image';
+ const kind=document.getElementById('pKind');if(kind)kind.value=file.type.startsWith('video/')?'reel':'image';
  const version=selectedMediaVersion;
+ const label=document.getElementById('mediaQualityInfo');
+ if(label)label.textContent='Inspecting and saving temporary media snapshot…';
  selectedMediaPromise=(async()=>{
-  if(file.size>100*1024*1024)throw Error('Media exceeds 100 MB limit');
-  if(!/^(image\/(jpeg|png|webp)|video\/(mp4|quicktime))$/i.test(file.type))throw Error('Unsupported media type. Use JPEG, PNG, WebP or MP4.');
-  // Snapshot bytes as soon as picker returns; avoid a later read from an expired Android gallery URI.
+  if(file.size<=0)throw Error('Media file is empty.');
+  if(file.size>100*1024*1024)throw Error('Media exceeds 100 MB import limit');
+  if(!/^(image\/(jpeg|png|webp)|video\/(mp4|quicktime))$/i.test(file.type))throw Error('Unsupported format. Choose JPG, PNG, WebP or MP4.');
+  // Read the Android gallery selection once, before transient URI access can expire.
   const bytes=await file.arrayBuffer();
   if(version!==selectedMediaVersion)return null;
-  selectedMediaSnapshot={bytes,name:file.name,type:file.type,size:file.size};
-  const label=document.getElementById('mediaQualityInfo');
-  if(label)label.textContent='Media ready · '+(file.size/1048576).toFixed(1)+' MB · '+(file.type.startsWith('video/')?'Video':'Image');
-  return selectedMediaSnapshot;
- })().catch(err=>{if(version===selectedMediaVersion){const label=document.getElementById('mediaQualityInfo');if(label)label.textContent='Media error: '+(err.message||err);toast('Cannot read selected media. Try Files or Downloads.')}return null});
- if(!file.type.startsWith('image/'))return;
- const reader=new FileReader();
- reader.onload=()=>{if(version!==selectedMediaVersion)return;preview.src=reader.result;preview.style.display='block';const image=new Image();image.onload=()=>{
-  if(version!==selectedMediaVersion)return;
-  const ratio=image.width/image.height,label=document.getElementById('mediaQualityInfo');
-  const suitable=Math.abs(ratio-9/16)<.035||Math.abs(ratio-1)<.035||Math.abs(ratio-4/5)<.035;
-  if(label)label.textContent=image.width+' × '+image.height+' px · '+(file.size/1048576).toFixed(1)+' MB'+(suitable?' · Standard social aspect':' · Crop may be required');
- };image.src=reader.result;};
- reader.onerror=()=>toast('Preview could not read this image. Select from Downloads.');
- reader.readAsDataURL(file);
+  const captured={bytes,name:file.name,type:file.type,size:file.size,width:0,height:0,duration:0};
+  selectedMediaSnapshot=captured;
+  selectedMediaPreviewUrl=URL.createObjectURL(new Blob([bytes],{type:file.type}));
+  if(label)label.textContent=mediaPreflightMessage(captured);
+  if(file.type.startsWith('image/')){
+   const img=new Image();
+   img.onload=()=>{if(version!==selectedMediaVersion)return;captured.width=img.naturalWidth;captured.height=img.naturalHeight;if(label)label.textContent=mediaPreflightMessage(captured);};
+   img.onerror=()=>{if(version===selectedMediaVersion&&label)label.textContent=mediaPreflightMessage(captured)+' · Could not inspect image dimensions';};
+   img.src=selectedMediaPreviewUrl;
+   if(preview){preview.src=selectedMediaPreviewUrl;preview.style.display='block';}
+  }else{
+   if(preview){preview.removeAttribute('src');preview.style.display='none';}
+   const v=document.createElement('video');v.preload='metadata';v.muted=true;
+   v.onloadedmetadata=()=>{if(version!==selectedMediaVersion)return;captured.width=v.videoWidth;captured.height=v.videoHeight;captured.duration=Number.isFinite(v.duration)?v.duration:0;if(label)label.textContent=mediaPreflightMessage(captured);v.removeAttribute('src');v.load();};
+   v.onerror=()=>{if(version===selectedMediaVersion&&label)label.textContent=mediaPreflightMessage(captured)+' · Could not inspect video metadata';};
+   v.src=selectedMediaPreviewUrl;
+  }
+  return captured;
+ })().catch(err=>{if(version===selectedMediaVersion){if(label)label.textContent='Media error: '+(err.message||err);toast('Cannot access media. Re-select from Files or Downloads.')}return null});
 }
 async function posterImageBlob(){
  if(editedPosterFile)return editedPosterFile;
@@ -705,7 +728,7 @@ async function storePost(scheduleNow=false){
     }
   }
   let file=carouselFiles.length>1?null:(editedPosterFile||document.getElementById('pMedia').files[0]);
-  if(!editedPosterFile&&file&&selectedMediaPromise){const captured=await selectedMediaPromise;if(!captured)throw Error('Gallery file access expired. Re-select media from Files / Downloads.');}
+  if(!editedPosterFile&&file&&selectedMediaPromise){const captured=await selectedMediaPromise;if(!captured)throw Error('Gallery file access expired. Re-select media from Files / Downloads.');if(captured.width&&captured.height&&(captured.width<320||captured.height<320))throw Error('Selected media is too low resolution (minimum 320 px each dimension).');}
   if(post.kind==='carousel'&&(!post.mediaIds||post.mediaIds.length<2)){toast('Attach 2–10 carousel images');return}
   if(post.kind!=='carousel'&&carouselFiles.length<2)post.mediaIds=[];
   if(file){

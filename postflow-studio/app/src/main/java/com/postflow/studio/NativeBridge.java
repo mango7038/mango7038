@@ -69,7 +69,7 @@ public final class NativeBridge {
         if(out==null||base64==null||base64.length()>950_000)return false;
         try {
             byte[] data=Base64.decode(base64,Base64.NO_WRAP);
-            if(out.getChannel().position()+data.length()>140L*1024*1024)return false;
+            if(out.getChannel().position()+data.length>140L*1024*1024)return false;
             out.write(data);return true;
         }catch(Exception ex){return false;}
     }

@@ -271,22 +271,36 @@ function captionForBrand(body,title){
  });
 }
 function useCaptionTemplate(id){
- const template=(state.captionTemplates||[]).find(t=>t.id===id);
- const field=document.getElementById('pCaption');
- if(!template||!field)return toast('Open a post to use a caption template');
- field.value=captionForBrand(template.text,document.getElementById('pTitle')?.value||'');
- closeModal();toast('Caption template inserted. Review before scheduling.');
+ const t=(state.captionTemplates||[]).find(x=>x.id===id);
+ const input=document.getElementById('pCaption');
+ if(!t||!input)return toast('Open a post to use a caption template');
+ if(t.workspace&&t.workspace!==state.activeWorkspace)return toast('Template belongs to another account');
+ input.value=captionForBrand(t.text,document.getElementById('pTitle')?.value||'');
+ const picker=document.getElementById('captionTemplatePicker');if(picker)picker.hidden=true;
+ input.focus();toast('Caption inserted. Review before scheduling.');
 }
 function showComposerTemplates(){
- const templates=(state.captionTemplates||[]).filter(t=>!t.workspace||!activeWorkspace()||t.workspace===state.activeWorkspace);
- if(!templates.length)return toast('Save a caption template in More → Advanced tools first.');
- const choices=templates.map((t,i)=>(i+1)+'. '+t.title).join('\n');
- const choice=window.prompt('Choose a template number:\n'+choices);
- if(choice===null)return;
- const item=templates[Number(choice)-1];if(!item)return toast('Invalid template number.');
- const area=document.getElementById('pCaption');if(!area)return toast('Open post editor first');
- area.value=captionForBrand(item.text,document.getElementById('pTitle')?.value||'');
- toast('Caption applied. Review it before scheduling.');
+ const input=document.getElementById('pCaption'),container=document.getElementById('captionTemplatePicker');
+ if(!input||!container)return toast('Open the post composer first.');
+ if(!container.hidden){container.hidden=true;return;}
+ const templates=(state.captionTemplates||[]).filter(t=>!t.workspace||t.workspace===state.activeWorkspace);
+ container.innerHTML='<div class="section"><h3>Caption templates</h3></div>'+
+ (templates.length?templates.map(t=>'<button class="btn secondary" style="display:block;width:100%;margin:7px 0;text-align:left" onclick="useCaptionTemplate('+JSON.stringify(t.id).replace(/"/g,'&quot;')+')"><strong>'+esc(t.title)+'</strong><small style="display:block;white-space:normal;opacity:.8;margin-top:4px">'+esc(t.text.slice(0,110))+'</small></button>').join(''):'<p class="sub">No saved templates for this account. Write a caption and tap Save as Template.</p>');
+ container.hidden=false;
+}
+function saveCurrentCaptionTemplate(){
+ const text=document.getElementById('pCaption')?.value.trim(),title=document.getElementById('pTitle')?.value.trim();
+ if(!text)return toast('Write your caption before saving a template.');
+ const name=window.prompt('Template name',title?title+' caption':'New caption template');
+ if(name===null)return;
+ const clean=name.trim().slice(0,90);if(!clean)return toast('Enter a template name.');
+ state.captionTemplates=state.captionTemplates||[];
+ const workspace=state.activeWorkspace||'';
+ if(state.captionTemplates.some(t=>t.workspace===workspace&&t.title.toLowerCase()===clean.toLowerCase()))return toast('A template with this name exists in this account.');
+ state.captionTemplates.push({id:uid(),title:clean,text,workspace});
+ if(!save())return toast('Could not persist caption template.');
+ const picker=document.getElementById('captionTemplatePicker');if(picker)picker.hidden=true;
+ toast('Template saved to this account.');
 }
 
 function bulkScheduleSelected(){
@@ -428,7 +442,7 @@ function editPost(id){
   showModal({title:p?'Edit Scheduled Post':'Create New Post',body:`<div class="wizard-head"><b>New Post · ${esc(activeWorkspace()?.name||'All Accounts')}</b><div class="wizard-steps">${[1,2,3,4,5].map(i=>`<span class="wizard-pip ${i===1?'active':''}" id="composerPip_${i}"></span>`).join('')}</div><span class="wizard-count" id="wizardProgress">Step 1 of 3 · Content</span></div><div class="composer-stage" data-stage="1"><div class="field"><label>Post Title</label><input id="pTitle" value="${esc(d.title)}" placeholder="Festival / promotion / birthday"></div>
   ${p?publishingHistory(p.id):''}${p?serverEditWarning(p.id):''}
   <div class="field"><label>Caption</label><textarea id="pCaption" placeholder="Write a caption...">${esc(d.caption)}</textarea></div>
-  <div class="actions">${btn('Generate SEO Caption','suggestCaption()','mini secondary')}${btn('Use Brand Template','showComposerTemplates()','mini secondary')}</div>
+  <div class="actions">${btn('Generate SEO Caption','suggestCaption()','mini secondary')}${btn('Use Brand Template','showComposerTemplates()','mini secondary')}${btn('Save as Template','saveCurrentCaptionTemplate()','mini secondary')}</div><div id="captionTemplatePicker" class="card" style="margin-top:10px" hidden></div>
   </div><div class="composer-stage" data-stage="2" hidden><div class="section"><h3>Poster Preview & Editor</h3></div>
   <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div id="mediaQualityInfo" class="note">Select a poster to inspect file size, dimensions and aspect ratio.</div><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
   <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onchange="previewSelectedPostMedia()"></div><div class="field"><label>Select 1–10 photos (1 = single post; 2–10 = carousel)</label><input id="pCarousel" type="file" accept="image/jpeg,image/png" multiple onchange="previewCarouselMedia()"><small id="carouselSelected">Existing carousel: ${(d.mediaIds||[]).length} images. JPG/PNG only.</small></div>

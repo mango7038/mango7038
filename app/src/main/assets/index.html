@@ -330,13 +330,52 @@ function toggleFavoritePost(id){
  p.favorite=!p.favorite;save();render();
 }
 function showBrandLibrary(){
- const posts=workspacePosts(state.posts),favorite=posts.filter(p=>p.favorite);
- const categories=[...new Set(posts.map(p=>p.category||'general'))];
- showModal({title:'Brand Content Library',body:'<p class="sub">Content for the active Instagram workspace, stored locally.</p>'+
- '<div class="section"><h3>Favorites · '+favorite.length+'</h3></div>'+
- (favorite.map(p=>'<div class="item">'+media(p)+'<div class="body"><b>'+esc(p.title)+'</b><small>'+esc(p.category||'general')+'</small></div></div>').join('')||'<div class="empty">No favorites yet.</div>')+
- '<div class="section"><h3>Categories</h3></div><div class="note">'+esc(categories.join(' · ')||'No media yet')+'</div>'});
+ const posts=workspacePosts(state.posts);
+ const categories=[...new Set(posts.map(p=>p.category||'general'))].sort();
+ const categoryOptions=categories.map(c=>'<option value="'+esc(c)+'">'+esc(c)+'</option>').join('');
+ showModal({title:'Brand Content Library',body:'<p class="sub">'+esc(activeWorkspace()?.name||'All Accounts')+' · Saved posts and original media references. Published jobs are never changed here.</p>'+
+ '<div class="field"><label>Search posters, titles or captions</label><input id="brandLibrarySearch" placeholder="Festival, project, campaign…" oninput="filterBrandLibrary()"></div>'+
+ '<div class="layout-actions"><div class="field"><label>Category</label><select id="brandLibraryCategory" onchange="filterBrandLibrary()"><option value="">All categories</option>'+categoryOptions+'</select></div>'+
+ '<div class="field"><label>Show</label><select id="brandLibraryMode" onchange="filterBrandLibrary()"><option value="all">All posts</option><option value="favorites">Favorites only</option><option value="drafts">Drafts only</option></select></div></div>'+
+ '<div id="brandLibraryResults"></div>'});
+ filterBrandLibrary();
 }
+function filterBrandLibrary(){
+ const out=document.getElementById('brandLibraryResults');if(!out)return;
+ const query=String(document.getElementById('brandLibrarySearch')?.value||'').trim().toLowerCase();
+ const category=document.getElementById('brandLibraryCategory')?.value||'';
+ const mode=document.getElementById('brandLibraryMode')?.value||'all';
+ const all=workspacePosts(state.posts);
+ const filtered=all.filter(p=>(!category||(p.category||'general')===category)&&
+  (mode!=='favorites'||p.favorite)&&(mode!=='drafts'||p.status==='draft')&&
+  (!query||[p.title,p.caption,p.category,p.mediaName].join(' ').toLowerCase().includes(query)));
+ out.innerHTML='<p class="sub">'+filtered.length+' of '+all.length+' saved posts</p>'+
+ (filtered.slice(0,100).map(p=>{
+  const arg=JSON.stringify(p.id).replace(/"/g,'&quot;');
+  return '<div class="item">'+media(p)+'<div class="body"><b>'+esc(p.title||'Untitled')+'</b><small>'+
+   esc(p.category||'general')+' · '+esc(p.status||'draft')+' · '+esc(p.date||'')+
+   '</small><div class="actions" style="margin-top:6px"><button class="rowbtn" onclick="toggleLibraryFavorite('+arg+')">'+(p.favorite?'★ Saved':'☆ Favorite')+'</button>'+
+   '<button class="rowbtn" onclick="duplicateLibraryPost('+arg+')">Copy Draft</button>'+
+   '<button class="rowbtn" onclick="closeModal();editPost('+arg+')">View</button></div></div></div>';
+ }).join('')||'<div class="pf-empty">No matching content for this account.</div>')+
+ (filtered.length>100?'<p class="sub">Showing first 100 posts. Narrow your search to find more.</p>':'');
+}
+function toggleLibraryFavorite(id){
+ const post=state.posts.find(x=>x.id===id);if(!post)return;
+ post.favorite=!post.favorite;
+ if(save())filterBrandLibrary();
+}
+function duplicateLibraryPost(id){
+ const account=activeWorkspace();if(!account)return toast('Select a single Instagram workspace before copying posts.');
+ const src=state.posts.find(x=>x.id===id);if(!src)return;
+ if(!confirm('Copy this content as a new draft for '+account.name+'? No publishing job will be created.'))return;
+ const copy={...src,id:uid(),status:'draft',workspaces:[accountKey(account)],wpSelected:[],targets:[],accountTargets:{},autoPrepRef:null,origin:'library-copy',favorite:false};
+ delete copy.serverId;delete copy.published_at;delete copy.verification_status;delete copy.error;
+ state.posts.push(copy);
+ if(!save()){state.posts.pop();return;}
+ filterBrandLibrary();toast('Draft copy created. Choose destinations before scheduling.');
+}
+
 function openMenu(){
  const main=[['home','⌂ Home'],['queue','▤ My Posts'],['calendar','▦ Calendar'],['library','▧ Content Library'],['accounts','◎ Connected Accounts'],['settings','⚙ Settings']];
  showModal({title:'Your workspace',body:'<p class="sub">Everything you need, without the clutter.</p><div class="pf-menu-options">'+

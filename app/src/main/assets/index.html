@@ -397,7 +397,7 @@ function openMenu(){
  main.map(([p,t])=>'<button class="btn secondary" onclick="closeModal();route(\''+p+'\')">'+t+'</button>').join('')+
  '</div><details class="advanced-settings"><summary>Advanced tools</summary><div class="pf-menu-options" style="margin-top:12px">'+
  [['events','Festivals & Events'],['brands','Brand Profiles'],['captions','Caption Templates'],['mediaSearch','Media Search'],['trash','Recycle Bin'],['api','API Configuration']].map(([p,t])=>'<button class="btn secondary" onclick="closeModal();'+(p==='api'?'apiManager()':p==='trash'?'recycleBin()':p==='brands'?'brandProfiles()':p==='captions'?'captionLibrary()':p==='mediaSearch'?'mediaSearch()':"route('"+p+"')")+'">'+t+'</button>').join('')+
- '</div></details><p class="sub" style="margin-top:16px">PostFlow Studio 7.1.0 · Publishing results require WordPress verification.</p>'});
+ '</div></details><p class="sub" style="margin-top:16px">PostFlow Studio 7.2.1 · Publishing results require WordPress verification.</p>'});
 }
 
 function accountKey(a){return String(a.platform)+':'+String(a.external_id);}

@@ -103,6 +103,7 @@ public final class EventScheduler {
         JSONArray posts=root.optJSONArray("posts");
         if(posts!=null)for(int i=0;i<posts.length()&&i<500;i++){
             JSONObject post=posts.optJSONObject(i);
+            // Server-queued posts are managed by WordPress; only manual WhatsApp targets trigger device reminders.
             if(post==null||!"scheduled".equals(post.optString("status")))continue;
             try{
                 LocalDate date=LocalDate.parse(post.optString("date"));
@@ -111,10 +112,13 @@ public final class EventScheduler {
                 if(targets!=null)for(int j=0;j<targets.length();j++){
                     if("wa_reminder".equals(targets.optString(j))){whatsapp=true;break;}
                 }
+                // No notification for server-managed publishing or other automated destinations.
+                // A WhatsApp reminder is explicitly manual sharing, independent of Meta status.
+                if(!whatsapp)continue;
                 String title=post.optString("title","Untitled");
                 schedule(c,alarms,ids,"post-"+post.optString("id",String.valueOf(i)),
-                    date.atTime(time).atZone(ZONE),whatsapp?"WhatsApp share ready: "+title:"Post due: "+title,
-                    whatsapp?"Tap to manually share media and caption":"Review post; API auto-posting not connected");
+                    date.atTime(time).atZone(ZONE),"WhatsApp share ready: "+title,
+                    "Tap to manually share this poster to WhatsApp Status");
             }catch(Exception ignored){}
         }
         prefs.edit().putString("items",String.join("\n",ids)).apply();

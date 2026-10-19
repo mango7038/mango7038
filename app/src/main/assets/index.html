@@ -295,13 +295,14 @@ function bulkScheduleSelected(){
  const chosen=workspacePosts(state.posts).filter(p=>bulkSelected.has(p.id));
  if(!chosen.length)return toast('Select posts first.');
  if(chosen.length>100)return toast('Bulk limit is 100 posts per batch.');
- const jobs=[],errors=[];
+ const jobs=[],errors=[],batchKeys=new Set();
  for(const p of chosen){
   if(hasActiveServerJobs(p.id)){errors.push(p.title+': existing server job');continue;}
   if(!p.mediaId&&!p.mediaIds?.length){errors.push(p.title+': no media');continue;}
   const check=validScheduleIST(p.date,p.time);if(!check.ok){errors.push(p.title+': '+check.message);continue;}
   const targets=wordpressTargetsForImported(p).filter(t=>accountKey(t.a)===accountKey(account));
   if(!targets.length){errors.push(p.title+': no Instagram destination');continue;}
+  const key=p.date+'|'+p.time+'|'+(p.fingerprint||p.mediaId||p.id);if(batchKeys.has(key)){errors.push(p.title+': duplicate media and schedule within batch');continue;}batchKeys.add(key);
   jobs.push({post:p,targets});
  }
  if(errors.length){showModal({title:'Bulk Schedule · Fix Errors',body:'<p class="sub">No jobs submitted. Resolve all errors first.</p>'+errors.slice(0,35).map(x=>'<div class="detail-error">'+esc(x)+'</div>').join('')});return;}

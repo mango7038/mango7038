@@ -240,9 +240,24 @@ function publishingHealth(){
  overdue:jobs.filter(j=>['scheduled','processing'].includes(j.status)&&Number(j.scheduled_at)>0&&Number(j.scheduled_at)<now-900)};
 }
 function openHealthMonitor(){
- const h=publishingHealth(),counts=[['Verified',h.verified.length],['Verification pending',h.pending.length],['Failed',h.failed.length],['Overdue',h.overdue.length]];
- const issues=[...h.failed,...h.overdue,...h.pending].slice(0,30);
- showModal({title:'Publishing Health',body:'<p class="sub">Account-wise WordPress job status. Only server verification confirms a published post.</p><div class="pf-metrics">'+counts.map(([name,n])=>'<div class="pf-metric"><strong>'+n+'</strong><small>'+esc(name)+'</small></div>').join('')+'</div><div class="section"><h3>Needs Review</h3></div>'+ (issues.map(j=>'<div class="item"><div class="body"><b>'+esc(j.account_name||j.external_id||j.platform||'Account')+'</b><small>'+esc(j.status||'unknown')+' · '+esc(String(j.error||'Check server').slice(0,120))+'</small></div></div>').join('')||'<div class="pf-empty">No known server issues. Cron and Meta delivery still require live verification.</div>')+btn('Refresh WordPress Jobs','closeModal();refreshPublishJobs()','full')});
+ const h=publishingHealth();
+ const counts=[['Verified',h.verified.length],['Verification pending',h.pending.length],['Failed',h.failed.length],['Overdue',h.overdue.length]];
+ const issues=[...h.failed,...h.overdue.filter(j=>!h.failed.includes(j)),...h.pending].slice(0,30);
+ const age=state.wpJobsLastSyncAt?Math.max(0,Date.now()-state.wpJobsLastSyncAt):null;
+ const refreshed=age===null?'Never synced':new Date(state.wpJobsLastSyncAt).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+' IST';
+ const stale=age===null||age>15*60*1000;
+ const active=activeWorkspace(),accounts=(state.wpAccounts||[]).filter(a=>!active||accountKey(a)===accountKey(active));
+ const now=Date.now();
+ const expiring=accounts.filter(a=>{const raw=Number(a.expires||a.token_expires_at||0);if(!raw)return false;const millis=raw<1e12?raw*1000:raw;return millis<=now+7*86400000;});
+ showModal({title:'Publishing Health',body:
+ '<p class="sub">Server-reported results, never assumed publication. This screen cannot confirm WP-Cron ran without server telemetry.</p>'+
+ '<div class="pf-metrics">'+counts.map(([name,n])=>'<div class="pf-metric"><strong>'+n+'</strong><small>'+esc(name)+'</small></div>').join('')+'</div>'+
+ '<div class="note">Last jobs sync: '+esc(refreshed)+(stale?'<p>⚠ Status may be stale. Refresh before retrying or rescheduling.</p>':'')+
+ (state.wpJobsLastError?'<p>Last request error: '+esc(state.wpJobsLastError)+'</p>':'')+'</div>'+
+ (expiring.length?'<div class="detail-error"><b>Account token needs attention</b><p>'+expiring.map(a=>esc(a.name)).join(', ')+' — verify authorization in WordPress.</p></div>':'')+
+ '<div class="section"><h3>Needs Review</h3></div>'+
+ (issues.map(j=>'<div class="item"><div class="body"><b>'+esc(j.account_name||j.external_id||j.platform||'Account')+'</b><small>'+esc(j.status||'unknown')+' · '+esc(String(j.error||'Check server').slice(0,120))+'</small></div><button class="rowbtn" onclick="showJobDetail('+Number(j.id)+')">Details</button></div>').join('')||'<div class="pf-empty">No known server issues. Confirm live post visibility separately.</div>')+
+ btn('Refresh WordPress Jobs','closeModal();refreshPublishJobs()','full')});
 }
 function openFeedPreview(){
  const posts=workspacePosts(state.posts).filter(p=>p.placement!=='story'&&p.kind!=='reel').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,24);
@@ -315,7 +330,7 @@ function bulkScheduleSelected(){
   const check=validScheduleIST(p.date,p.time);if(!check.ok){errors.push(p.title+': '+check.message);continue;}
   const targets=wordpressTargetsForImported(p).filter(t=>accountKey(t.a)===accountKey(account));
   if(!targets.length){errors.push(p.title+': no Instagram destination');continue;}
-  if(targets.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&j.platform===a.platform&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','attention','awaiting_verification'].includes(j.status)))){errors.push(p.title+': publishing job already exists for selected destination');continue;}
+  if(targets.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&(!j.external_id||(j.platform===a.platform&&j.external_id===String(a.external_id)&&j.placement===placement))&&['uploading','scheduled','processing','published','attention','awaiting_verification'].includes(j.status)))){errors.push(p.title+': publishing job already exists for selected destination');continue;}
   const key=p.date+'|'+p.time+'|'+(p.fingerprint||p.mediaId||p.id);if(batchKeys.has(key)){errors.push(p.title+': duplicate media and schedule within batch');continue;}batchKeys.add(key);
   jobs.push({post:p,targets});
  }
@@ -1265,7 +1280,7 @@ function setPublishTimeTenMinutes(){
 function submitDirectWordPress(p,selected){
  const at=Math.floor(Date.parse(p.date+'T'+p.time+':00+05:30')/1000);
  if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120)return toast('Schedule expired. Edit date/time and try again.');
- if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('A publishing job already exists for one of the selected accounts. Check its status first.');
+ if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&(!j.external_id||(j.external_id===String(a.external_id)&&j.placement===placement))&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('A publishing job already exists for one of the selected accounts. Check its status first.');
  state.wpPendingJobs=state.wpPendingJobs||{};
  for(const {a,placement} of selected){
   const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');
@@ -1300,7 +1315,7 @@ function submitPublishPost(id){
  const accounts=(state.wpAccounts||[]).filter(x=>(x.platform==='facebook'||x.platform==='instagram')&&(!activeWorkspace()||accountKey(x)===state.activeWorkspace));
  const selected=accounts.flatMap((a,i)=>{const placement=document.getElementById('pub_'+i)?.value;return placement?[{a,placement}]:[]});
  if(!selected.length)return toast('Select at least one destination in the active workspace');
- if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('That account already has a publishing job for this post.');
+ if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&(!j.external_id||(j.external_id===String(a.external_id)&&j.placement===placement))&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('That account already has a publishing job for this post.');
  if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.external_id===String(a.external_id)&&j.placement===placement&&j.serverId&&['scheduled','processing','published','attention'].includes(j.status))))return toast('That account already has a server job. Check its status first.');
  if(!confirm('Schedule '+selected.length+' publishing job(s) on WordPress for '+date+' '+time+' IST?'))return;
  state.wpPendingJobs=state.wpPendingJobs||{};
@@ -1322,8 +1337,8 @@ window.onPostFlowPublish=function(raw){
   const r=JSON.parse(raw);
   if(r.mutation){if(r.ok&&r.job){state.wpServerJobs=(state.wpServerJobs||[]).map(j=>Number(j.id)===Number(r.job_id)?r.job:j);for(const local of Object.values(state.wpPendingJobs||{})){if(Number(local.serverId)===Number(r.job_id)){local.status=r.job.status;local.scheduled_at=r.job.scheduled_at;local.error=r.job.error||'';}}save();toast(r.mutation==='DELETE'?'Scheduled job cancelled on WordPress':'WordPress job updated');showJobDetail(Number(r.job_id));}else{toast(r.error||'Update was rejected');showJobDetail(Number(r.job_id));}return;}
   if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';if(j.postId){const p=state.posts.find(x=>x.id===j.postId);if(p){const others=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===j.postId);p.status=others.every(x=>x.status==='upload_failed')?'draft':others.some(x=>x.status==='uploading')?'uploading':'scheduled';}}}reconcileServerJobs();save();toast(r.ok?'WordPress accepted the publishing job':r.error||'Upload failed');if(page==='accounts')render();}
-  else if(Array.isArray(r.jobs)){state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();if(silentJobsRefresh){silentJobsRefresh=false;if(['home','queue','library'].includes(page))render();}else showPublishJobs();}
-  else if(r.error)toast(r.error);
+  else if(Array.isArray(r.jobs)){state.wpJobsLastSyncAt=Date.now();state.wpJobsLastError='';state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();if(silentJobsRefresh){silentJobsRefresh=false;if(['home','queue','library'].includes(page))render();}else showPublishJobs();}
+  else if(r.error){state.wpJobsLastError=String(r.error).slice(0,400);save();if(!silentJobsRefresh)toast(r.error);silentJobsRefresh=false;}
  }catch(e){toast('Unexpected publishing response');}
 };
 function publishTime(v,status){return v?new Date(v*1000).toLocaleString('en-IN',{timeZone:'Asia/Kolkata',dateStyle:'medium',timeStyle:'short'})+' IST':(status==='published'?'Not recorded (older post)':'Not published yet')}

@@ -18,9 +18,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.10.2'
-      - uses: android-actions/setup-android@v3
-      - name: Install platform SDK
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'platform-tools'
+      # GitHub's Ubuntu Android runner already includes command-line tools.
+      # Avoid setup-android@v3 installing the obsolete SDK package "tools".
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses > /dev/null || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools"
       - name: Decode launcher icons
         run: bash postflow-studio/prepare-assets.sh
       - name: Compile Android app

@@ -63,7 +63,7 @@ jobs:
           const document={documentElement:element(),body:element(),getElementById:element,querySelector:element,querySelectorAll(){return []}};
           const window={matchMedia(){return {matches:false,addEventListener(){}}},scrollTo(){}};
           const localStorage={getItem(){return null},setItem(){}};
-          const context={document,window,localStorage,setTimeout(){},console,Intl,Date,JSON,Math,Set,Map};
+          const context={document,window,localStorage,setTimeout(){},setInterval(){},console,Intl,Date,JSON,Math,Set,Map};
           vm.createContext(context);
           vm.runInContext(script,context,{timeout:5000});
           assert(document.getElementById('page'),'Page element not found');

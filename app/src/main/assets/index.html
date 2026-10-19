@@ -252,12 +252,12 @@ function openFeedPreview(){
 function prepareFestivalDrafts(){
  const account=activeWorkspace();if(!account)return toast('Select an Instagram account before preparing festivals');
  const today=dateLocal(),until=addDays(today,30);
- const events=(state.events||[]).filter(e=>e.type==='festival'&&e.date>=today&&e.date<=until);
+ const events=nextEvents().filter(e=>e.type==='festival'&&e.viewDate>=today&&e.viewDate<=until);
  let created=0;
  for(const event of events){
-  const ref='festival:'+event.id+':'+accountKey(account);
+  const eventDate=event.viewDate,ref='festival:'+event.id+':'+eventDate+':'+accountKey(account);
   if(state.posts.some(p=>p.autoPrepRef===ref))continue;
-  state.posts.push({id:uid(),title:event.title,caption:makeCaption(event.title,'festival'),date:event.date,time:state.settings.time||'09:00',kind:'image',status:'draft',targets:['ig_story'],workspaces:[accountKey(account)],autoPrepRef:ref,thumb:'',mediaId:null,origin:'festival-draft'});
+  state.posts.push({id:uid(),title:event.title,caption:makeCaption(event.title,'festival'),date:eventDate,time:state.settings.time||'09:00',kind:'image',status:'draft',targets:['ig_story'],workspaces:[accountKey(account)],autoPrepRef:ref,thumb:'',mediaId:null,origin:'festival-draft'});
   created++;
  }
  if(created){save();route('queue')}
@@ -311,11 +311,11 @@ function bulkScheduleSelected(){
  if(chosen.length>100)return toast('Bulk limit is 100 posts per batch.');
  const jobs=[],errors=[],batchKeys=new Set();
  for(const p of chosen){
-  if(hasActiveServerJobs(p.id)){errors.push(p.title+': existing server job');continue;}
   if(!p.mediaId&&!p.mediaIds?.length){errors.push(p.title+': no media');continue;}
   const check=validScheduleIST(p.date,p.time);if(!check.ok){errors.push(p.title+': '+check.message);continue;}
   const targets=wordpressTargetsForImported(p).filter(t=>accountKey(t.a)===accountKey(account));
   if(!targets.length){errors.push(p.title+': no Instagram destination');continue;}
+  if(targets.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&j.platform===a.platform&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','attention','awaiting_verification'].includes(j.status)))){errors.push(p.title+': publishing job already exists for selected destination');continue;}
   const key=p.date+'|'+p.time+'|'+(p.fingerprint||p.mediaId||p.id);if(batchKeys.has(key)){errors.push(p.title+': duplicate media and schedule within batch');continue;}batchKeys.add(key);
   jobs.push({post:p,targets});
  }
@@ -887,12 +887,27 @@ function validFestivalDateTime(date,time){
 }
 function wordpressTargetsForImported(post){
  const accounts=(state.wpAccounts||[]).filter(a=>a.platform==='instagram'||a.platform==='facebook');
- const selected=[];
+ const selected=[],explicit=Array.isArray(post.wpSelected)?post.wpSelected.filter(Boolean):[];
  for(const a of accounts){
-  if(post.workspaces?.length&&!post.workspaces.includes(accountKey(a)))continue;
-  if(activeWorkspace()&&!post.workspaces?.length&&accountKey(a)!==state.activeWorkspace)continue;
-  if(post.targets.includes(a.platform==='instagram'?'ig_feed':'fb_feed'))selected.push({a,placement:'feed'});
-  if(post.targets.includes(a.platform==='instagram'?'ig_story':'fb_story'))selected.push({a,placement:'story'});
+  const key=accountKey(a);
+  if(activeWorkspace()&&key!==state.activeWorkspace)continue;
+  if(post.workspaces?.length&&!post.workspaces.includes(key))continue;
+  const prefix=a.platform+'_'+a.external_id+':';
+  let placements=[];
+  if(explicit.length){
+   placements=explicit.filter(x=>x.startsWith(prefix)).map(x=>x.slice(prefix.length));
+  }else{
+   const targets=Array.isArray(post.targets)?post.targets:[];
+   if(targets.includes(a.platform==='instagram'?'ig_feed':'fb_feed'))placements.push('feed');
+   if(targets.includes(a.platform==='instagram'?'ig_story':'fb_story'))placements.push('story');
+  }
+  for(let placement of placements){
+   if(!['feed','story','reel','carousel'].includes(placement))continue;
+   if(placement==='story'&&(post.kind==='carousel'||(post.mediaIds||[]).length>1))continue;
+   if(placement==='feed'&&(post.kind==='carousel'||(post.mediaIds||[]).length>1))placement='carousel';
+   else if(placement==='feed'&&post.kind==='reel')placement='reel';
+   if(!selected.some(x=>accountKey(x.a)===key&&x.placement===placement))selected.push({a,placement});
+  }
  }
  return selected;
 }

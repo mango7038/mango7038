@@ -246,7 +246,7 @@ function openHealthMonitor(){
 }
 function openFeedPreview(){
  const posts=workspacePosts(state.posts).filter(p=>p.placement!=='story'&&p.kind!=='reel').slice().sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,24);
- showModal({title:'Instagram Grid Preview',body:'<p class="sub">Preview of local planned images, not the live Instagram feed.</p><div class="pf-feed-grid">'+posts.map(p=>'<button class="pf-feed-tile" onclick="closeModal();editPost('+JSON.stringify(p.id)+')">'+(p.thumb?'<img src="'+esc(p.thumb)+'" alt="Post preview">':'▧')+'</button>').join('')+'</div>'+(!posts.length?'<div class="empty">No feed posts in this workspace yet.</div>':'')});
+ showModal({title:'Instagram Grid Preview',body:'<p class="sub">Preview of local planned images, not the live Instagram feed.</p><div class="pf-feed-grid">'+posts.map(p=>'<button class="pf-feed-tile" onclick="'+esc('closeModal();editPost('+JSON.stringify(p.id)+')')+'">'+(p.thumb?'<img src="'+esc(p.thumb)+'" alt="Post preview">':'▧')+'</button>').join('')+'</div>'+(!posts.length?'<div class="empty">No feed posts in this workspace yet.</div>':'')});
 }
 
 function prepareFestivalDrafts(){

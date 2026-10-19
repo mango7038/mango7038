@@ -129,7 +129,7 @@ function setScheduleBusy(busy){
  for(const b of buttons){b.disabled=busy;b.textContent=busy?'Scheduling…':'Schedule Post'}
 }
 function due(p){return !postTrackingState(p) && p.status==='scheduled' && (p.date<dateLocal()||(p.date===dateLocal()&&p.time <= new Intl.DateTimeFormat('en-GB',{timeZone:TZ,hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date())))}
-function counts(){return{scheduled:state.posts.filter(x=>x.status==='scheduled'&&!due(x)).length,drafts:state.posts.filter(x=>x.status==='draft').length,due:state.posts.filter(x=>due(x)).length,events:state.events.length}}
+function counts(){const posts=workspacePosts(state.posts);return{scheduled:posts.filter(x=>x.status==='scheduled'&&!due(x)).length,drafts:posts.filter(x=>x.status==='draft').length,due:posts.filter(x=>due(x)).length,events:state.events.length}}
 function notifyDue(){if(state.settings.notifications){let d=state.posts.filter(due).length;if(d)toast(`${d} local posting reminder(s) are due. Check server Publishing Jobs separately.`)}}
 function route(p){page=p;if(p!=='queue'){bulkMode=false;bulkSelected.clear()}render();window.scrollTo(0,0)}
 function toast(msg){let el=document.getElementById('toast');el.textContent=msg;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2900)}
@@ -891,7 +891,7 @@ async function importZipAfterReview(){
      }if(shouldSchedule)times.add(date+'|'+time)}
      if(!shouldSchedule)review++;
      const captionText=approved?.caption??rec?.caption??matched.caption??meta.caption;
-     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(approved?.greeting??rec?.greeting??''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:approved?.type||rec?.type||'post'};
+     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(approved?.greeting??rec?.greeting??''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},workspaces:activeWorkspace()?[state.activeWorkspace]:[],status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:approved?.type||rec?.type||'post'};
      state.posts.push(post);
      if(shouldSchedule)toSubmit.push(post);
      added++;
@@ -941,7 +941,7 @@ function setPublishTimeTenMinutes(){
 function submitDirectWordPress(p,selected){
  const at=Math.floor(Date.parse(p.date+'T'+p.time+':00+05:30')/1000);
  if(!Number.isFinite(at)||at<Math.floor(Date.now()/1000)+120)return toast('Schedule expired. Edit date/time and try again.');
- if(Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status)))return toast('Publishing job already exists. Check status first.');
+ if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===p.id&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('A publishing job already exists for one of the selected accounts. Check its status first.');
  state.wpPendingJobs=state.wpPendingJobs||{};
  for(const {a,placement} of selected){
   const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');
@@ -976,6 +976,7 @@ function submitPublishPost(id){
  const accounts=(state.wpAccounts||[]).filter(x=>(x.platform==='facebook'||x.platform==='instagram')&&(!activeWorkspace()||accountKey(x)===state.activeWorkspace));
  const selected=accounts.flatMap((a,i)=>{const placement=document.getElementById('pub_'+i)?.value;return placement?[{a,placement}]:[]});
  if(!selected.length)return toast('Select at least one destination in the active workspace');
+ if(selected.some(({a,placement})=>Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.external_id===String(a.external_id)&&j.placement===placement&&['uploading','scheduled','processing','published','awaiting_verification','attention'].includes(j.status))))return toast('That account already has a publishing job for this post.');
  if(Object.values(state.wpPendingJobs||{}).some(j=>j.postId===id&&j.serverId&&['scheduled','processing','published','attention'].includes(j.status)))return toast('A server job already exists. Check its status before uploading again.');
  if(!confirm('Schedule '+selected.length+' publishing job(s) on WordPress for '+date+' '+time+' IST?'))return;
  state.wpPendingJobs=state.wpPendingJobs||{};

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widgetRoot" android:layout_width="match_parent"
+    android:layout_height="match_parent" android:orientation="vertical"
+    android:padding="12dp" android:background="@drawable/widget_background">
+    <TextView android:id="@+id/widgetTitle" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="✦ FESTIVAL CALENDAR"
+        android:textColor="#C9BDFF" android:textSize="12sp" android:textStyle="bold" />
+    <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
+        android:layout_height="165dp" android:scaleType="fitCenter" android:contentDescription="Current month with festival markers" />
+    <TextView android:id="@+id/widgetNext" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:text="Add a festival or birthday"
+        android:textColor="#FFFFFF" android:textSize="14sp" android:maxLines="1" />
+    <TextView android:id="@+id/widgetSecond" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="3dp"
+        android:textColor="#ADB7D4" android:textSize="11sp" android:maxLines="1" />
+    <TextView android:id="@+id/widgetThird" android:layout_width="match_parent"
+        android:layout_height="wrap_content" android:layout_marginTop="3dp"
+        android:textColor="#ADB7D4" android:textSize="11sp" android:maxLines="1" />
+</LinearLayout>

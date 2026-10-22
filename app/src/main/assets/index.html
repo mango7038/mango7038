@@ -139,7 +139,21 @@ nav{bottom:calc(9px + env(safe-area-inset-bottom));left:12px;right:12px;border:1
 @media(min-width:740px){nav{left:50%;right:auto;width:min(680px,calc(100% - 24px));transform:translateX(-50%)}.sheet{border-radius:27px!important}.pf-feature{padding:28px!important}}
 @media(max-width:355px){.pf-metrics{gap:6px}.pf-metric{padding:11px 7px}.pf-metric strong{font-size:22px}.pf-feature .btn{padding:10px 12px}}
 @media(prefers-reduced-motion:reduce){#page.page-enter,.modal,.sheet{animation:none!important}html{scroll-behavior:auto}}
-.pf-feed-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin:16px 0}.pf-feed-tile{border:0;border-radius:5px;background:var(--soft);aspect-ratio:1;overflow:hidden;color:var(--muted);font-size:28px;padding:0}.pf-feed-tile img{width:100%;height:100%;object-fit:cover}</style></head><body>
+.pf-feed-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin:16px 0}.pf-feed-tile{border:0;border-radius:5px;background:var(--soft);aspect-ratio:1;overflow:hidden;color:var(--muted);font-size:28px;padding:0}.pf-feed-tile img{width:100%;height:100%;object-fit:cover}
+/* PostFlow Media Library: responsive preview-left/caption-right cards */
+.pf-post-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;margin:0 0 12px;box-shadow:0 5px 18px #0000000d;min-width:0}
+.pf-post-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;min-width:0}
+.pf-post-heading h3{font-size:16px;line-height:1.35;font-weight:750;margin:0;overflow-wrap:anywhere;flex:1;min-width:0}
+.pf-post-heading .pf-fav{flex:none}
+.pf-post-content{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr);gap:13px;align-items:start;min-width:0}
+.pf-post-preview{min-width:0;overflow:hidden;border-radius:12px;background:var(--soft);aspect-ratio:4/5}
+.pf-post-preview .thumb{width:100%;height:100%;min-width:0;border-radius:12px;object-fit:cover}
+.pf-post-caption{color:var(--muted);font-size:12px;line-height:1.55;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:8;-webkit-box-orient:vertical;white-space:normal;min-width:0}
+.pf-post-footer{border-top:1px solid var(--line);margin-top:12px;padding-top:10px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px}
+.pf-post-detail{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.pf-post-status{max-width:100%;flex-shrink:0}.pf-post-status .tag{display:inline-block;white-space:normal;text-align:center;line-height:1.35}
+@media(min-width:600px){.pf-post-content{grid-template-columns:minmax(0,200px) minmax(0,1fr)}.pf-post-caption{font-size:13px}}
+</style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
 const TZ='Asia/Kolkata',DEST=[['ig_feed','Instagram Feed'],['ig_story','Instagram Story'],['fb_feed','Facebook Feed'],['fb_story','Facebook Story'],['gbp_update','Google Business Profile'],['wa_reminder','WhatsApp Share Reminder']];
@@ -227,7 +241,25 @@ function toast(msg){let el=document.getElementById('toast');el.textContent=msg;e
 function btn(label,fn,cls='secondary'){return `<button class="btn ${cls}" onclick="${fn}">${label}</button>`}
 function media(p){return p.thumb?`<img class="thumb" src="${p.thumb}">`:`<div class="thumb">${p.kind==='reel'?'▶':'▧'}</div>`}
 function tag(p){const tracked=postTrackingState(p);if(tracked==='published')return '<span class="tag green">Verified Published ✓</span>';if(tracked==='verification')return '<span class="tag">Verification pending</span>';if(tracked==='failed'||tracked==='partial')return '<span class="tag red">Publishing needs attention</span>';if(tracked==='processing')return '<span class="tag">Processing</span>';if(tracked==='uploading')return '<span class="tag">Uploading…</span>';if(tracked==='scheduled')return '<span class="tag green">Scheduled on server</span>';return p.status==='published'?'<span class="tag">Locally marked published · unverified</span>':p.status==='awaiting_verification'?'<span class="tag">Verification pending</span>':p.status==='uploading'?'<span class="tag">Preparing upload…</span>':p.status==='processing'?'<span class="tag">Processing</span>':p.status==='attention'?'<span class="tag red">Needs attention</span>':p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">Reminder due</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':'<span class="tag green">Scheduled</span>'}
-function postItem(p){return `<div class="item" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">${bulkMode?`<input type="checkbox" aria-label="Select post" style="width:20px;min-width:20px;accent-color:#987bff" ${bulkSelected.has(p.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${p.id}')">`:''}${media(p)}<div class="body"><b>${esc(p.title||'Untitled Post')}</b><small>${fmt(p.date)} • ${esc(p.time||'09:00')} IST</small><small>${esc((p.caption||'No caption generated').slice(0,92))}</small><small>${(p.targets||[]).length} channel(s) • ${localPublishingJobs(p).length?localPublishingJobs(p).map(x=>x.account).filter(Boolean).join(', '):Object.keys(p.accountTargets||{}).length+' selected account(s)'}</small></div><button class="rowbtn" onclick="event.stopPropagation();toggleFavoritePost('${p.id}')" aria-label="Toggle favorite">${p.favorite?'★':'☆'}</button>${tag(p)}</div>`}
+function postItem(p){
+ const channels=localPublishingJobs(p).length?localPublishingJobs(p).map(x=>x.account).filter(Boolean).join(', '):(Object.keys(p.accountTargets||{}).length+' selected account(s)');
+ const title=esc(p.title||'Untitled Post');
+ const caption=esc(p.caption||'No caption generated');
+ return `<article class="pf-post-card" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">
+  <div class="pf-post-heading">
+   <h3 title="${title}">${title}</h3>
+   ${bulkMode?`<input type="checkbox" aria-label="Select post" style="width:20px;accent-color:#987bff" ${bulkSelected.has(p.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${p.id}')">`:`<button class="rowbtn pf-fav" onclick="event.stopPropagation();toggleFavoritePost('${p.id}')" aria-label="Toggle favorite">${p.favorite?'★':'☆'}</button>`}
+  </div>
+  <div class="pf-post-content">
+   <div class="pf-post-preview">${media(p)}</div>
+   <div class="pf-post-caption" title="${caption}">${caption}</div>
+  </div>
+  <div class="pf-post-footer">
+   <div class="pf-post-detail"><span>◷ ${fmt(p.date)} · ${esc(p.time||'09:00')} IST</span><span>${esc(channels)}</span></div>
+   <div class="pf-post-status">${tag(p)}</div>
+  </div>
+ </article>`;
+}
 function eventItem(ev){return `<div class="item" onclick="editEvent('${ev.id}')"><div class="thumb">${ev.type==='birthday'?'🎂':ev.type==='festival'?'🪔':'📆'}</div><div class="body"><b>${esc(ev.title)}</b><small>${fmt(ev.date)}${ev.repeat?' • Yearly':''}</small></div><span class="tag">${esc(ev.type)}</span></div>`}
 
 function publishingHealth(){

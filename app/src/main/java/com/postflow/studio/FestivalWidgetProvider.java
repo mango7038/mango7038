@@ -186,7 +186,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     private static Bitmap weekBitmap(Context c,LocalDate selected){
         int w=490,h=115;Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(b);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        LocalDate start=selected.minusDays(3);\n        JSONObject data=state(c);
+        LocalDate start=selected.minusDays(3);
+        JSONObject data=state(c);
         for(int i=0;i<7;i++){
             LocalDate date=start.plusDays(i);float cx=35+70*i;
             if(date.equals(selected)){paint.setColor(0xff7655db);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}

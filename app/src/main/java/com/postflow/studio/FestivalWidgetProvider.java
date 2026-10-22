@@ -48,7 +48,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             if(id<0)return;
             String key="day_"+id;
             LocalDate date;
-            try{date=LocalDate.parse(c.getSharedPreferences(PREF,0).getString(key,LocalDate.now(EventScheduler.ZONE).toString()));}
+            try{android.content.SharedPreferences sp=c.getSharedPreferences(PREF,0);date=sp.getBoolean("follow_today_"+id,true)?LocalDate.now(EventScheduler.ZONE):LocalDate.parse(sp.getString(key,LocalDate.now(EventScheduler.ZONE).toString()));}
             catch(Exception e){date=LocalDate.now(EventScheduler.ZONE);}
             if(ACTION_TODAY.equals(action))date=LocalDate.now(EventScheduler.ZONE);
             if(ACTION_DATE.equals(action))date=date.plusDays(Math.max(-7,Math.min(7,intent.getIntExtra("delta",0))));
@@ -115,6 +115,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         rv.setTextViewText(R.id.widgetTitle,day.getMonth().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH)+" "+day.getYear());
         rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL)+" • "+(posts.isEmpty()?"No posts":(index+1)+" / "+posts.size()));
         rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day));
+        rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-7,0));
+        rv.setOnClickPendingIntent(R.id.widgetNextWeek,broadcast(c,id,21,ACTION_DATE,7,0));
+        int[] dateCells={R.id.widgetDate0,R.id.widgetDate1,R.id.widgetDate2,R.id.widgetDate3,R.id.widgetDate4,R.id.widgetDate5,R.id.widgetDate6};
+        for(int i=0;i<dateCells.length;i++)rv.setOnClickPendingIntent(dateCells[i],broadcast(c,id,30+i,ACTION_DATE,i-3,0));
         rv.setTextViewText(R.id.widgetNext,current==null?"No scheduled posts":current.title);
         rv.setTextViewText(R.id.widgetSecond,current==null?"Select another date":current.kind+" · "+current.status.replace('_',' '));
         rv.setTextViewText(R.id.widgetThird,current==null?"":"Preview · "+day.format(LABEL));

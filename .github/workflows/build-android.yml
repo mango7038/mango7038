@@ -47,7 +47,8 @@ jobs:
             chmod 600 "$HOME/.android/debug.keystore"
             echo "Persistent debug signing key supplied."
           else
-            echo "::error::Missing original POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. Refusing to build an APK that cannot update the existing installation."\n            exit 1
+            echo "::error::Missing original POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. Refusing to build without the permanent key."
+            exit 1
           fi
       - name: Smoke-test WebView startup JavaScript
         shell: bash
@@ -87,12 +88,12 @@ jobs:
           test -s "$APK"
           unzip -t "$APK" | tail -n 2
           "$AAPT" dump badging "$APK" | head -n 15
-          "$AAPT" dump badging "$APK" | grep -q "name='com.postflow.studio.v6'"
-          "$AAPT" dump badging "$APK" | grep -q "versionCode='73'"
+          "$AAPT" dump badging "$APK" | grep -q "name='com.postflow.studio.stable'"
+          "$AAPT" dump badging "$APK" | grep -q "versionCode='1'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-7.3.0-stable-apk
+          name: PostFlow-Studio-7.4.0-stable-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error

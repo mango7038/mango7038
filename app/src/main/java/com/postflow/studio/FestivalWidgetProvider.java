@@ -52,7 +52,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             catch(Exception e){date=LocalDate.now(EventScheduler.ZONE);}
             if(ACTION_TODAY.equals(action))date=LocalDate.now(EventScheduler.ZONE);
             if(ACTION_DATE.equals(action))date=date.plusDays(Math.max(-7,Math.min(7,intent.getIntExtra("delta",0))));
-            c.getSharedPreferences(PREF,0).edit().putString(key,date.toString()).putInt("item_"+id,ACTION_ITEM.equals(action)?Math.max(0,intent.getIntExtra("index",0)):0).apply();
+            c.getSharedPreferences(PREF,0).edit().putBoolean("follow_today_"+id,ACTION_TODAY.equals(action)).putString(key,date.toString()).putInt("item_"+id,ACTION_ITEM.equals(action)?Math.max(0,intent.getIntExtra("index",0)):0).apply();
             updateOne(c,AppWidgetManager.getInstance(c),id);
         }
     }
@@ -60,7 +60,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     @Override public void onUpdate(Context c,AppWidgetManager manager,int[] ids){updateAll(c,manager,ids);}
     @Override public void onDeleted(Context c,int[] ids){
         android.content.SharedPreferences.Editor ed=c.getSharedPreferences(PREF,0).edit();
-        for(int id:ids){ed.remove("day_"+id);ed.remove("item_"+id);}ed.apply();
+        for(int id:ids){ed.remove("day_"+id);ed.remove("item_"+id);ed.remove("follow_today_"+id);}ed.apply();
     }
     static void updateAll(Context c,AppWidgetManager manager,int[] ids){
         for(int id:ids)updateOne(c,manager,id);
@@ -107,7 +107,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     private static void updateOne(Context c,AppWidgetManager manager,int id){
         LocalDate today=LocalDate.now(EventScheduler.ZONE),day;
         android.content.SharedPreferences prefs=c.getSharedPreferences(PREF,0);
-        try{day=LocalDate.parse(prefs.getString("day_"+id,today.toString()));}catch(Exception ex){day=today;}
+        try{day=prefs.getBoolean("follow_today_"+id,true)?today:LocalDate.parse(prefs.getString("day_"+id,today.toString()));}catch(Exception ex){day=today;}
         List<Item> posts=onDate(c,day);
         int index=Math.max(0,Math.min(prefs.getInt("item_"+id,0),Math.max(0,posts.size()-1)));
         Item current=posts.isEmpty()?null:posts.get(index);
@@ -154,10 +154,39 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         opts.inJustDecodeBounds=false;
         try{return BitmapFactory.decodeFile(file.getAbsolutePath(),opts);}catch(Exception e){return null;}
     }
+    /** Status markers for the visible week: Story green, feed Post blue, Festival red. */
+    private static int[] markers(JSONObject root,LocalDate day){
+        boolean story=false,post=false,festival=false;
+        JSONArray posts=root.optJSONArray("posts");
+        if(posts!=null)for(int i=0;i<posts.length()&&i<2000;i++){
+            JSONObject p=posts.optJSONObject(i);
+            if(p==null||!day.toString().equals(p.optString("date")))continue;
+            String status=p.optString("status","");
+            if(!("scheduled".equals(status)||"published".equals(status)||"processing".equals(status)||"uploading".equals(status)||"awaiting_verification".equals(status)))continue;
+            String type=(p.optString("kind","")+" "+p.optString("type","")+" "+p.optString("placement","")).toLowerCase(Locale.ROOT);
+            JSONArray targets=p.optJSONArray("targets");
+            if(targets!=null)for(int j=0;j<targets.length();j++)type+=" "+targets.optString(j).toLowerCase(Locale.ROOT);
+            JSONObject accountTargets=p.optJSONObject("accountTargets");
+            if(accountTargets!=null)type+=" "+accountTargets.toString().toLowerCase(Locale.ROOT);
+            if(type.contains("story"))story=true;
+            if(type.contains("feed")||type.contains("post")||(!type.contains("story")&&!type.contains("reel")))post=true;
+        }
+        JSONArray events=root.optJSONArray("events");
+        if(events!=null)for(int i=0;i<events.length()&&i<500;i++){
+            JSONObject e=events.optJSONObject(i);if(e==null)continue;
+            try{
+                LocalDate eventDate=LocalDate.parse(e.optString("date",""));
+                if(eventDate.equals(day)||(e.optBoolean("repeat",false)&&eventDate.getMonthValue()==day.getMonthValue()&&eventDate.getDayOfMonth()==day.getDayOfMonth())){
+                    if("festival".equalsIgnoreCase(e.optString("type","festival")))festival=true;
+                }
+            }catch(Exception ignored){}
+        }
+        return new int[]{story?0xff28c987:0,post?0xff3996ff:0,festival?0xffff5267:0};
+    }
     private static Bitmap weekBitmap(Context c,LocalDate selected){
         int w=490,h=115;Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(b);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        LocalDate start=selected.minusDays(3);
+        LocalDate start=selected.minusDays(3);\n        JSONObject data=state(c);
         for(int i=0;i<7;i++){
             LocalDate date=start.plusDays(i);float cx=35+70*i;
             if(date.equals(selected)){paint.setColor(0xff7655db);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}
@@ -170,6 +199,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             String label=String.valueOf(date.getDayOfMonth());
             canvas.drawText(label,cx-paint.measureText(label)/2,80,paint);
             paint.setFakeBoldText(false);
+            int[] dots=markers(data,date);int count=0;for(int color:dots)if(color!=0)count++;
+            if(count>0){int n=0;for(int color:dots){if(color==0)continue;paint.setColor(color);canvas.drawCircle(cx+(n-(count-1)/2f)*12,98,4.1f,paint);n++;}}
         }
         return b;
     }

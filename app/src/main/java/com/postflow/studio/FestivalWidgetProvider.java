@@ -127,7 +127,13 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         rv.setOnClickPendingIntent(R.id.widgetToday,broadcast(c,id,3,ACTION_TODAY,0,0));
         rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_ITEM,0,Math.max(0,index-1)));
         rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_ITEM,0,Math.min(posts.size()-1,index+1)));
-        Intent open=new Intent(c,MainActivity.class);
+        Intent open=new Intent(c,WidgetPreviewActivity.class);
+        if(current!=null){
+            open.putExtra("media_id",current.mediaId);
+            open.putExtra("caption",current.caption);
+            open.putExtra("title",current.title);
+        }
+        open.setData(Uri.parse("postflow-preview://widget/"+id+"/"+day.toString()+"/"+index));
         rv.setOnClickPendingIntent(R.id.widgetOpen,PendingIntent.getActivity(c,id*100+6,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
         Bitmap preview=current==null?null:thumbnail(c,current.mediaId);
         if(preview!=null){

@@ -12,6 +12,7 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <activity android:name=".WidgetPreviewActivity" android:exported="false" />
         <activity android:name=".WidgetShareActivity" android:exported="false" android:theme="@android:style/Theme.Translucent.NoTitleBar" />
         <provider android:name=".MediaContentProvider" android:authorities="${applicationId}.media" android:exported="false" android:grantUriPermissions="true" />
         <receiver android:name=".ReminderReceiver" android:exported="false"/>

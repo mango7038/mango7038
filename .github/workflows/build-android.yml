@@ -1,4 +1,4 @@
-name: Build PostFlow Studio V6 APK
+name: Build PostFlow Studio stable release APK
 on:
   workflow_dispatch:
   push:
@@ -35,21 +35,29 @@ jobs:
           fi
           echo "Using $SDKMANAGER"
           "$SDKMANAGER" --sdk_root="$SDK" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
-      - name: Restore persistent signing certificate when configured
-        env:
-          DEBUG_KEYSTORE_BASE64: ${{ secrets.POSTFLOW_DEBUG_KEYSTORE_BASE64 }}
+      - name: Restore permanent release signing credentials
         shell: bash
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.POSTFLOW_SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.POSTFLOW_SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.POSTFLOW_SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.POSTFLOW_SIGNING_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          if [ -n "$DEBUG_KEYSTORE_BASE64" ]; then
-            mkdir -p "$HOME/.android"
-            printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
-            chmod 600 "$HOME/.android/debug.keystore"
-            echo "Persistent debug signing key supplied."
-          else
-            echo "::error::Missing original POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. Refusing to build without the permanent key."
-            exit 1
-          fi
+          for value in "$SIGNING_KEYSTORE_BASE64" "$SIGNING_STORE_PASSWORD" "$SIGNING_KEY_ALIAS" "$SIGNING_KEY_PASSWORD"; do
+            if [ -z "$value" ]; then
+              echo "::error::Missing one or more PostFlow permanent release signing secrets."
+              exit 1
+            fi
+          done
+          KEYSTORE="$RUNNER_TEMP/postflow-release.jks"
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | tr -d '[:space:]' | base64 --decode > "$KEYSTORE"
+          test -s "$KEYSTORE"
+          keytool -list -keystore "$KEYSTORE" -storepass "$SIGNING_STORE_PASSWORD" -alias "$SIGNING_KEY_ALIAS" > /dev/null
+          echo "POSTFLOW_KEYSTORE_PATH=$KEYSTORE" >> "$GITHUB_ENV"
+          echo "POSTFLOW_STORE_PASSWORD=$SIGNING_STORE_PASSWORD" >> "$GITHUB_ENV"
+          echo "POSTFLOW_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> "$GITHUB_ENV"
+          echo "POSTFLOW_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
       - name: Smoke-test WebView startup JavaScript
         shell: bash
         run: |
@@ -70,12 +78,12 @@ jobs:
           assert(document.getElementById('page'),'Page element not found');
           console.log('PostFlow WebView startup smoke test PASS');
           NODE
-      - name: Build isolated V6 package debug APK
-        run: gradle --no-daemon --stacktrace :app:assembleDebug
+      - name: Build permanently signed release APK
+        run: gradle --no-daemon --stacktrace :app:assembleRelease
       - name: Validate APK signature
         run: |
           set -euo pipefail
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          APK=app/build/outputs/apk/release/app-release.apk
           test -s "$APK"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs "$APK"
           ls -lh "$APK"
@@ -83,17 +91,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK=app/build/outputs/apk/debug/app-debug.apk
+          APK=app/build/outputs/apk/release/app-release.apk
           AAPT="$ANDROID_HOME/build-tools/35.0.0/aapt"
           test -s "$APK"
           unzip -t "$APK" | tail -n 2
           "$AAPT" dump badging "$APK" | head -n 15
           "$AAPT" dump badging "$APK" | grep -q "name='com.postflow.studio.stable'"
-          "$AAPT" dump badging "$APK" | grep -q "versionCode='1'"
+          "$AAPT" dump badging "$APK" | grep -q "versionCode='2'"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-7.4.0-stable-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: PostFlow-Studio-7.4.1-signed-release
+          path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

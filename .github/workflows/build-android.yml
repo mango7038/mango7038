@@ -47,7 +47,7 @@ jobs:
             chmod 600 "$HOME/.android/debug.keystore"
             echo "Persistent debug signing key supplied."
           else
-            echo "::warning::No POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. This run uses a newly generated debug certificate; it may NOT update APKs from previous runs."
+            echo "::error::Missing original POSTFLOW_DEBUG_KEYSTORE_BASE64 secret. Refusing to build an APK that cannot update the existing installation."\n            exit 1
           fi
       - name: Smoke-test WebView startup JavaScript
         shell: bash

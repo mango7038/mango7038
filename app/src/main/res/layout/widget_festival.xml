@@ -12,9 +12,42 @@
             android:padding="7dp" android:text="Today" android:textColor="#DBCFFF" android:textSize="12sp"
             android:background="#343049" />
     </LinearLayout>
-    <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
-        android:layout_height="64dp" android:layout_marginTop="7dp" android:scaleType="fitXY"
-        android:contentDescription="Seven-day calendar with selected date" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:gravity="center_vertical" android:orientation="horizontal">
+        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="25dp" android:layout_height="64dp"
+            android:text="‹" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
+        <FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="64dp">
+            <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
+                android:layout_height="match_parent" android:scaleType="fitXY"
+                android:contentDescription="Seven-day calendar with colored schedule markers" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
+                android:orientation="horizontal">
+                <TextView android:id="@+id/widgetDate0" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate1" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate2" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate3" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate4" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate5" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate6" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="match_parent"
+                    android:contentDescription="Select calendar day" />
+            </LinearLayout>
+        </FrameLayout>
+        <TextView android:id="@+id/widgetNextWeek" android:layout_width="25dp" android:layout_height="64dp"
+            android:text="›" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
+    </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
         <TextView android:id="@+id/widgetPrevDay" android:layout_width="45dp" android:layout_height="wrap_content"

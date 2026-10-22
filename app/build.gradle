@@ -8,11 +8,22 @@ android {
         applicationId 'com.postflow.studio.stable'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '7.4.0'
+        versionCode 2
+        versionName '7.4.1'
+    }
+    signingConfigs {
+        stable {
+            storeFile file(System.getenv('POSTFLOW_KEYSTORE_PATH') ?: 'postflow-upload.jks')
+            storePassword System.getenv('POSTFLOW_STORE_PASSWORD') ?: ''
+            keyAlias System.getenv('POSTFLOW_KEY_ALIAS') ?: ''
+            keyPassword System.getenv('POSTFLOW_KEY_PASSWORD') ?: ''
+        }
     }
     buildTypes {
-        release { minifyEnabled false }
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.stable
+        }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17

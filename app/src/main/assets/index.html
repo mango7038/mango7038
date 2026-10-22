@@ -141,7 +141,7 @@ nav{bottom:calc(9px + env(safe-area-inset-bottom));left:12px;right:12px;border:1
 @media(prefers-reduced-motion:reduce){#page.page-enter,.modal,.sheet{animation:none!important}html{scroll-behavior:auto}}
 .pf-feed-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:3px;margin:16px 0}.pf-feed-tile{border:0;border-radius:5px;background:var(--soft);aspect-ratio:1;overflow:hidden;color:var(--muted);font-size:28px;padding:0}.pf-feed-tile img{width:100%;height:100%;object-fit:cover}
 /* PostFlow Media Library: responsive preview-left/caption-right cards */
-.pf-post-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;margin:0 0 12px;box-shadow:0 5px 18px #0000000d;min-width:0}
+.pf-library-card{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px;margin:0 0 12px;box-shadow:0 5px 18px #0000000d;min-width:0}
 .pf-post-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;min-width:0}
 .pf-post-heading h3{font-size:16px;line-height:1.35;font-weight:750;margin:0;overflow-wrap:anywhere;flex:1;min-width:0}
 .pf-post-heading .pf-fav{flex:none}
@@ -153,6 +153,32 @@ nav{bottom:calc(9px + env(safe-area-inset-bottom));left:12px;right:12px;border:1
 .pf-post-detail{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1;color:var(--muted);font-size:11px;overflow-wrap:anywhere}
 .pf-post-status{max-width:100%;flex-shrink:0}.pf-post-status .tag{display:inline-block;white-space:normal;text-align:center;line-height:1.35}
 @media(min-width:600px){.pf-post-content{grid-template-columns:minmax(0,200px) minmax(0,1fr)}.pf-post-caption{font-size:13px}}
+
+/* 7.5.1 cohesive dark/light contrast and component fixes */
+:root{--bg:#0c1020;--card:#171e30;--surface:#171e30;--soft:#252d45;--modal:#192138;--input:#202940;--navbg:#111827ef;--line:#3b4762;--border:#3b4762;--text:#f5f7ff;--fieldtext:#f5f7ff;--muted:#b2bdd2;--primary:#bba5ff;--accent:#bba5ff;--green:#70e5b8;--red:#ff9aac;--stroke:#3b4762;color-scheme:dark}
+:root[data-theme="light"]{--bg:#f5f6fb;--card:#ffffff;--surface:#ffffff;--soft:#edf0f8;--modal:#ffffff;--input:#ffffff;--navbg:#fffffff0;--line:#d8dfed;--border:#d8dfed;--text:#1c2540;--fieldtext:#1c2540;--muted:#526078;--primary:#6042c6;--accent:#6042c6;--green:#187b59;--red:#b72f52;--stroke:#d8dfed;color-scheme:light}
+body,main,.card,.stat,.sheet,.pf-library-card{color:var(--text)}
+input,textarea,select{color:var(--fieldtext)!important;background:var(--input)!important;border-color:var(--line)!important}
+input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}
+input[type=date],input[type=time]{color-scheme:inherit}
+:root[data-theme="light"] input[type=date],:root[data-theme="light"] input[type=time]{color-scheme:light}
+:root:not([data-theme="light"]) input[type=date],:root:not([data-theme="light"]) input[type=time]{color-scheme:dark}
+.day,.monthnav button,.advanced-settings,.pf-menu-options .btn.secondary{background:var(--soft);color:var(--text);border-color:var(--line)}
+.day strong,.day.selected strong{color:var(--text)}
+.day.selected{background:color-mix(in srgb,var(--primary) 24%,var(--card));border-color:var(--primary)}
+.day small,.muted,p.sub,.pf-library-card .pf-post-caption{color:var(--muted)}
+.tag{background:var(--soft);color:var(--primary);border:1px solid var(--line)}
+.tag.green{background:color-mix(in srgb,var(--green) 15%,var(--card));color:var(--green);border-color:color-mix(in srgb,var(--green) 32%,var(--line))}
+.tag.red{background:color-mix(in srgb,var(--red) 15%,var(--card));color:var(--red);border-color:color-mix(in srgb,var(--red) 32%,var(--line))}
+.chip,.pill{background:var(--soft);color:var(--primary)}
+.note,.empty,.pf-empty{background:var(--soft)!important;color:var(--muted)!important;border-color:var(--line)!important}
+.pf-library-card{width:100%;max-width:none;display:block;min-width:0;box-shadow:0 5px 18px #0000000d}
+.pf-library-card .pf-post-heading h3{color:var(--text)}
+.pf-library-card .pf-post-preview .thumb{width:100%;height:100%;min-width:0}
+.pf-library-card .pf-post-caption{white-space:normal;overflow-wrap:anywhere}
+:root[data-theme="light"] .pf-feature .btn.secondary{color:#ffffff!important}
+:root[data-theme="light"] .navItem{color:var(--muted)}:root[data-theme="light"] .navItem.active{color:var(--primary)}
+:root[data-theme="light"] .pf-post-card{color:var(--text)}
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
@@ -245,7 +271,7 @@ function postItem(p){
  const channels=localPublishingJobs(p).length?localPublishingJobs(p).map(x=>x.account).filter(Boolean).join(', '):(Object.keys(p.accountTargets||{}).length+' selected account(s)');
  const title=esc(p.title||'Untitled Post');
  const caption=esc(p.caption||'No caption generated');
- return `<article class="pf-post-card" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">
+ return `<article class="pf-library-card" onclick="${bulkMode?`toggleBulk('${p.id}')`:`editPost('${p.id}')`}">
   <div class="pf-post-heading">
    <h3 title="${title}">${title}</h3>
    ${bulkMode?`<input type="checkbox" aria-label="Select post" style="width:20px;accent-color:#987bff" ${bulkSelected.has(p.id)?'checked':''} onclick="event.stopPropagation();toggleBulk('${p.id}')">`:`<button class="rowbtn pf-fav" onclick="event.stopPropagation();toggleFavoritePost('${p.id}')" aria-label="Toggle favorite">${p.favorite?'★':'☆'}</button>`}

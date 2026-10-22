@@ -12,7 +12,7 @@ import java.io.FileNotFoundException;
 
 /** Read-only provider for sharing app-private media with user-selected Android apps. */
 public final class MediaContentProvider extends ContentProvider {
-    public static final String AUTHORITY="com.postflow.studio.stable.media";
+    public static final String AUTHORITY="com.postflow.studio.permanent.media";
     static File directory(android.content.Context c) {
         File dir=new File(c.getFilesDir(),"media");
         if(!dir.isDirectory()) dir.mkdirs();

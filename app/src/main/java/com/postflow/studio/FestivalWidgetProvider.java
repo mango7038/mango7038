@@ -125,7 +125,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         Item current=posts.isEmpty()?null:posts.get(index);
         RemoteViews rv=new RemoteViews(c.getPackageName(),R.layout.widget_festival);
         rv.setTextViewText(R.id.widgetTitle,day.getMonth().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH)+" "+day.getYear());
-        rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL)+" • "+(posts.isEmpty()?"No posts":(index+1)+" / "+posts.size()));
+        rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL));
+        rv.setTextViewText(R.id.widgetPostPosition,posts.size()>1?(index+1)+" / "+posts.size():"");
+        rv.setViewVisibility(R.id.widgetPrevPost,posts.size()>1?android.view.View.VISIBLE:android.view.View.INVISIBLE);
+        rv.setViewVisibility(R.id.widgetNextPost,posts.size()>1?android.view.View.VISIBLE:android.view.View.INVISIBLE);
         int shown=visibleDays(manager,id);
         rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day,shown));
         rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-shown,0));
@@ -141,8 +144,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         rv.setOnClickPendingIntent(R.id.widgetPrevDay,broadcast(c,id,1,ACTION_DATE,-1,0));
         rv.setOnClickPendingIntent(R.id.widgetNextDay,broadcast(c,id,2,ACTION_DATE,1,0));
         rv.setOnClickPendingIntent(R.id.widgetToday,broadcast(c,id,3,ACTION_TODAY,0,0));
-        rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_ITEM,0,Math.max(0,index-1)));
-        rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_ITEM,0,Math.min(posts.size()-1,index+1)));
+        rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_ITEM,0,posts.isEmpty()?0:(index+posts.size()-1)%posts.size()));
+        rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_ITEM,0,posts.isEmpty()?0:(index+1)%posts.size()));
         Intent open=new Intent(c,WidgetPreviewActivity.class);
         if(current!=null){
             open.putExtra("media_id",current.mediaId);
@@ -210,25 +213,39 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }
         return new int[]{story?0xff28c987:0,post?0xff3996ff:0,festival?0xffff5267:0};
     }
+    /** High resolution, proportional date cards; FIT_CENTER keeps every card's aspect ratio. */
     private static Bitmap weekBitmap(Context c,LocalDate selected,int shown){
-        int w=70*shown,h=115;Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
-        Canvas canvas=new Canvas(b);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        final int slot=66, h=104, scale=3;
+        Bitmap b=Bitmap.createBitmap(slot*shown*scale,h*scale,Bitmap.Config.ARGB_8888);
+        Canvas canvas=new Canvas(b);
+        canvas.scale(scale,scale);
+        Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
         LocalDate start=selected.minusDays(shown/2);
         JSONObject data=state(c);
         for(int i=0;i<shown;i++){
-            LocalDate date=start.plusDays(i);float cx=35+70*i;
-            if(date.equals(selected)){paint.setColor(0xff7655db);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}
-            else {paint.setColor(0x553f3a57);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}
-            paint.setColor(0xffd4cbee);paint.setTextSize(17);
-            String wd=date.getDayOfWeek().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH);
-            wd=wd.substring(0,Math.min(3,wd.length()));
-            canvas.drawText(wd,cx-paint.measureText(wd)/2,36,paint);
-            paint.setColor(Color.WHITE);paint.setTextSize(26);paint.setFakeBoldText(true);
-            String label=String.valueOf(date.getDayOfMonth());
-            canvas.drawText(label,cx-paint.measureText(label)/2,80,paint);
-            paint.setFakeBoldText(false);
-            int[] dots=markers(data,date);int count=0;for(int color:dots)if(color!=0)count++;
-            if(count>0){int n=0;for(int color:dots){if(color==0)continue;paint.setColor(color);canvas.drawCircle(cx+(n-(count-1)/2f)*12,98,4.1f,paint);n++;}}
+            LocalDate date=start.plusDays(i);
+            float cx=slot*(i+.5f);
+            paint.setColor(date.equals(selected)?0xff7753dc:0x773d3656);
+            canvas.drawRoundRect(new RectF(cx-28,2,cx+28,101),18,18,paint);
+            paint.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
+            paint.setTextSize(14);
+            paint.setColor(0xffd7cfea);
+            String weekday=date.getDayOfWeek().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH);
+            canvas.drawText(weekday,cx-paint.measureText(weekday)/2,30,paint);
+            paint.setColor(Color.WHITE);
+            paint.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
+            paint.setTextSize(27);
+            String dayNumber=String.valueOf(date.getDayOfMonth());
+            canvas.drawText(dayNumber,cx-paint.measureText(dayNumber)/2,71,paint);
+            int[] dots=markers(data,date),count=0;
+            for(int color:dots)if(color!=0)count++;
+            int n=0;
+            for(int color:dots){
+                if(color==0)continue;
+                paint.setColor(color);
+                canvas.drawCircle(cx+(n-(count-1)/2f)*11,89,3.6f,paint);
+                n++;
+            }
         }
         return b;
     }

@@ -70,11 +70,12 @@ jobs:
           assert(script,'Inline application JavaScript missing');
           const element=()=>({innerHTML:'',classList:{add(){},remove(){}},style:{},setAttribute(){},addEventListener(){},querySelectorAll(){return []},scrollTo(){},value:'',textContent:''});
           const document={documentElement:element(),body:element(),getElementById:element,querySelector:element,querySelectorAll(){return []}};
-          const window={matchMedia(){return {matches:false,addEventListener(){}}},scrollTo(){}};
+          const window={matchMedia(){return {matches:false,addEventListener(){}}},scrollTo(){},addEventListener(){},removeEventListener(){}};
           const localStorage={getItem(){return null},setItem(){}};
-          const context={document,window,localStorage,setTimeout(){},setInterval(){},console,Intl,Date,JSON,Math,Set,Map};
+          const context={document,window,localStorage,setTimeout(){},setInterval(){},requestAnimationFrame(){},cancelAnimationFrame(){},console,Intl,Date,JSON,Math,Set,Map};
           vm.createContext(context);
-          vm.runInContext(script,context,{timeout:5000});
+          try { vm.runInContext(script,context,{timeout:5000}); }
+          catch (e) { console.error('PostFlow startup test error:',e.stack||e); process.exit(1); }
           assert(document.getElementById('page'),'Page element not found');
           console.log('PostFlow WebView startup smoke test PASS');
           NODE

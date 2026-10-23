@@ -58,6 +58,18 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     }
 
     @Override public void onUpdate(Context c,AppWidgetManager manager,int[] ids){updateAll(c,manager,ids);}
+    @Override public void onAppWidgetOptionsChanged(Context c,AppWidgetManager manager,int id,android.os.Bundle options){
+        super.onAppWidgetOptionsChanged(c,manager,id,options);
+        updateOne(c,manager,id);
+    }
+    private static int visibleDays(AppWidgetManager manager,int id){
+        android.os.Bundle options=manager.getAppWidgetOptions(id);
+        int width=options==null?0:options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,0);
+        if(width<=0)return 5;
+        if(width<255)return 3;
+        if(width<355)return 5;
+        return 7;
+    }
     @Override public void onDeleted(Context c,int[] ids){
         android.content.SharedPreferences.Editor ed=c.getSharedPreferences(PREF,0).edit();
         for(int id:ids){ed.remove("day_"+id);ed.remove("item_"+id);ed.remove("follow_today_"+id);}ed.apply();
@@ -114,11 +126,14 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         RemoteViews rv=new RemoteViews(c.getPackageName(),R.layout.widget_festival);
         rv.setTextViewText(R.id.widgetTitle,day.getMonth().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH)+" "+day.getYear());
         rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL)+" • "+(posts.isEmpty()?"No posts":(index+1)+" / "+posts.size()));
-        rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day));
-        rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-7,0));
-        rv.setOnClickPendingIntent(R.id.widgetNextWeek,broadcast(c,id,21,ACTION_DATE,7,0));
+        int shown=visibleDays(manager,id);\n        rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day,shown));
+        rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-shown,0));
+        rv.setOnClickPendingIntent(R.id.widgetNextWeek,broadcast(c,id,21,ACTION_DATE,shown,0));
         int[] dateCells={R.id.widgetDate0,R.id.widgetDate1,R.id.widgetDate2,R.id.widgetDate3,R.id.widgetDate4,R.id.widgetDate5,R.id.widgetDate6};
-        for(int i=0;i<dateCells.length;i++)rv.setOnClickPendingIntent(dateCells[i],broadcast(c,id,30+i,ACTION_DATE,i-3,0));
+        for(int i=0;i<dateCells.length;i++){
+            rv.setViewVisibility(dateCells[i],i<shown?android.view.View.VISIBLE:android.view.View.GONE);
+            if(i<shown)rv.setOnClickPendingIntent(dateCells[i],broadcast(c,id,30+i,ACTION_DATE,i-shown/2,0));
+        }
         rv.setTextViewText(R.id.widgetNext,current==null?"No scheduled posts":current.title);
         rv.setTextViewText(R.id.widgetSecond,current==null?"Select another date":current.kind+" · "+current.status.replace('_',' '));
         rv.setTextViewText(R.id.widgetThird,current==null?"":"Preview · "+day.format(LABEL));
@@ -193,10 +208,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }
         return new int[]{story?0xff28c987:0,post?0xff3996ff:0,festival?0xffff5267:0};
     }
-    private static Bitmap weekBitmap(Context c,LocalDate selected){
-        int w=490,h=115;Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+    private static Bitmap weekBitmap(Context c,LocalDate selected,int shown){
+        int w=70*shown,h=115;Bitmap b=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(b);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        LocalDate start=selected.minusDays(3);
+        LocalDate start=selected.minusDays(shown/2);
         JSONObject data=state(c);
         for(int i=0;i<7;i++){
             LocalDate date=start.plusDays(i);float cx=35+70*i;

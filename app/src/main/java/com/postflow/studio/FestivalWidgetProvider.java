@@ -66,8 +66,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         android.os.Bundle options=manager.getAppWidgetOptions(id);
         int width=options==null?0:options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH,0);
         if(width<=0)return 5;
-        if(width<255)return 3;
-        if(width<355)return 5;
+        if(width<220)return 3;
+        if(width<330)return 5;
         return 7;
     }
     @Override public void onDeleted(Context c,int[] ids){
@@ -137,7 +137,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }
         rv.setTextViewText(R.id.widgetNext,current==null?"No scheduled posts":current.title);
         rv.setTextViewText(R.id.widgetSecond,current==null?"Select another date":current.kind+" · "+current.status.replace('_',' '));
-        rv.setTextViewText(R.id.widgetThird,current==null?"":"Preview · "+day.format(LABEL));
+        rv.setTextViewText(R.id.widgetThird,current==null?"":day.format(LABEL));
         rv.setOnClickPendingIntent(R.id.widgetPrevDay,broadcast(c,id,1,ACTION_DATE,-1,0));
         rv.setOnClickPendingIntent(R.id.widgetNextDay,broadcast(c,id,2,ACTION_DATE,1,0));
         rv.setOnClickPendingIntent(R.id.widgetToday,broadcast(c,id,3,ACTION_TODAY,0,0));
@@ -158,6 +158,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }else rv.setViewVisibility(R.id.widgetPoster,android.view.View.GONE);
         boolean shareable=current!=null&&MediaContentProvider.valid(current.mediaId)&&MediaContentProvider.mediaFile(c,current.mediaId).isFile();
         rv.setViewVisibility(R.id.widgetShare,shareable?android.view.View.VISIBLE:android.view.View.GONE);
+        rv.setViewVisibility(R.id.widgetOpen,shareable?android.view.View.VISIBLE:android.view.View.GONE);
         if(shareable){
             Intent share=new Intent(c,WidgetShareActivity.class);
             share.putExtra("media_id",current.mediaId);
@@ -214,15 +215,15 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         Canvas canvas=new Canvas(b);Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         LocalDate start=selected.minusDays(shown/2);
         JSONObject data=state(c);
-        for(int i=0;i<7;i++){
+        for(int i=0;i<shown;i++){
             LocalDate date=start.plusDays(i);float cx=35+70*i;
             if(date.equals(selected)){paint.setColor(0xff7655db);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}
-            else {paint.setColor(0xff30324c);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}
+            else {paint.setColor(0x553f3a57);canvas.drawRoundRect(new RectF(cx-31,3,cx+31,110),20,20,paint);}
             paint.setColor(0xffd4cbee);paint.setTextSize(17);
             String wd=date.getDayOfWeek().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH);
             wd=wd.substring(0,Math.min(3,wd.length()));
             canvas.drawText(wd,cx-paint.measureText(wd)/2,36,paint);
-            paint.setColor(Color.WHITE);paint.setTextSize(29);paint.setFakeBoldText(true);
+            paint.setColor(Color.WHITE);paint.setTextSize(26);paint.setFakeBoldText(true);
             String label=String.valueOf(date.getDayOfMonth());
             canvas.drawText(label,cx-paint.measureText(label)/2,80,paint);
             paint.setFakeBoldText(false);

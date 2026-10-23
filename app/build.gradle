@@ -8,8 +8,8 @@ android {
         applicationId 'com.postflow.studio.permanent'
         minSdk 26
         targetSdk 35
-        versionCode 4
-        versionName '7.6.0'
+        versionCode 5
+        versionName '7.6.1'
     }
     signingConfigs {
         stable {

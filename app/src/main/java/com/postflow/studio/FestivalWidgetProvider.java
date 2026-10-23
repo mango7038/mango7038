@@ -237,7 +237,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             paint.setTextSize(27);
             String dayNumber=String.valueOf(date.getDayOfMonth());
             canvas.drawText(dayNumber,cx-paint.measureText(dayNumber)/2,71,paint);
-            int[] dots=markers(data,date),count=0;
+            int[] dots=markers(data,date);
+            int count=0;
             for(int color:dots)if(color!=0)count++;
             int n=0;
             for(int color:dots){

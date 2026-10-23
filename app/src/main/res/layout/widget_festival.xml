@@ -14,11 +14,11 @@
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:gravity="center_vertical" android:orientation="horizontal">
-        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="25dp" android:layout_height="58dp"
+        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="25dp" android:layout_height="76dp"
             android:text="‹" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
-        <FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="64dp">
+        <FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="76dp">
             <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
-                android:layout_height="match_parent" android:scaleType="fitXY"
+                android:layout_height="match_parent" android:scaleType="fitCenter"
                 android:contentDescription="Adaptive calendar with colored schedule markers" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal">
@@ -45,7 +45,7 @@
                     android:contentDescription="Select calendar day" />
             </LinearLayout>
         </FrameLayout>
-        <TextView android:id="@+id/widgetNextWeek" android:layout_width="25dp" android:layout_height="64dp"
+        <TextView android:id="@+id/widgetNextWeek" android:layout_width="25dp" android:layout_height="76dp"
             android:text="›" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -58,8 +58,8 @@
         <TextView android:id="@+id/widgetNextDay" android:layout_width="45dp" android:layout_height="wrap_content"
             android:text="›" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
-        android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="9dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="10dp" android:paddingBottom="8dp">
         <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
             android:orientation="vertical">
             <TextView android:id="@+id/widgetSecond" android:layout_width="match_parent"
@@ -87,7 +87,7 @@
         android:orientation="horizontal" android:gravity="center_vertical">
         <TextView android:id="@+id/widgetPrevPost" android:layout_width="50dp" android:layout_height="wrap_content"
             android:text="◀" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />
-        <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
+        <TextView android:id="@+id/widgetPostPosition" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
             android:text="" android:gravity="center"
             android:textColor="#8987AB" android:textSize="9sp" />
         <TextView android:id="@+id/widgetNextPost" android:layout_width="50dp" android:layout_height="wrap_content"

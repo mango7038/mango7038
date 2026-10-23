@@ -48,7 +48,7 @@
         <TextView android:id="@+id/widgetNextWeek" android:layout_width="25dp" android:layout_height="64dp"
             android:text="›" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+    <LinearLayout android:layout_width="match_parent" 
         android:orientation="horizontal" android:gravity="center_vertical">
         <TextView android:id="@+id/widgetPrevDay" android:layout_width="45dp" android:layout_height="wrap_content"
             android:text="‹" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />

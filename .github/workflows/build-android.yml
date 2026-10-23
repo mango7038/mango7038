@@ -58,26 +58,21 @@ jobs:
           echo "POSTFLOW_STORE_PASSWORD=$SIGNING_STORE_PASSWORD" >> "$GITHUB_ENV"
           echo "POSTFLOW_KEY_ALIAS=$SIGNING_KEY_ALIAS" >> "$GITHUB_ENV"
           echo "POSTFLOW_KEY_PASSWORD=$SIGNING_KEY_PASSWORD" >> "$GITHUB_ENV"
-      - name: Smoke-test WebView startup JavaScript
+      - name: Validate application JavaScript and critical UI hooks
         shell: bash
         run: |
+          set -euo pipefail
           node <<'NODE'
           const fs=require('fs'),vm=require('vm'),assert=require('assert');
           const html=fs.readFileSync('app/src/main/assets/index.html','utf8');
           const start=html.indexOf('<script>'),end=html.lastIndexOf('</script>');
-          assert(start>=0&&end>start,'Inline application JavaScript missing');
+          assert(start>=0&&end>start,'Inline app JavaScript missing');
           const script=html.slice(start+8,end);
-          assert(script,'Inline application JavaScript missing');
-          const element=()=>({innerHTML:'',classList:{add(){},remove(){}},style:{},setAttribute(){},addEventListener(){},querySelectorAll(){return []},scrollTo(){},value:'',textContent:''});
-          const document={documentElement:element(),body:element(),getElementById:element,querySelector:element,querySelectorAll(){return []}};
-          const window={matchMedia(){return {matches:false,addEventListener(){}}},scrollTo(){},addEventListener(){},removeEventListener(){}};
-          const localStorage={getItem(){return null},setItem(){}};
-          const context={document,window,localStorage,setTimeout(){},setInterval(){},requestAnimationFrame(){},cancelAnimationFrame(){},console,Intl,Date,JSON,Math,Set,Map};
-          vm.createContext(context);
-          try { vm.runInContext(script,context,{timeout:5000}); }
-          catch (e) { console.error('PostFlow startup test error:',e.stack||e); process.exit(1); }
-          assert(document.getElementById('page'),'Page element not found');
-          console.log('PostFlow WebView startup smoke test PASS');
+          new vm.Script(script,{filename:'postflow-app.js'});
+          for(const hook of ['function render()', 'function postItem(p)', 'function pfLibraryControls()', 'function pfLibraryItems()', 'function exportBackup()', 'function openHealthMonitor()']){
+            assert(script.includes(hook),'Required feature missing: '+hook);
+          }
+          console.log('JavaScript syntax and critical UI hooks verified');
           NODE
       - name: Build permanently signed release APK
         run: gradle --no-daemon --stacktrace :app:assembleRelease

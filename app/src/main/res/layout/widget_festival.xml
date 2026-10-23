@@ -2,24 +2,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widgetRoot" android:layout_width="match_parent"
     android:layout_height="match_parent" android:orientation="vertical"
-    android:padding="10dp" android:background="@drawable/widget_background">
+    android:padding="14dp" android:background="@drawable/widget_background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
         <TextView android:id="@+id/widgetTitle" android:layout_width="0dp" android:layout_weight="1"
             android:layout_height="wrap_content" android:text="OCT 2026" android:textColor="#FFFFFF"
-            android:textSize="17sp" android:textStyle="bold" />
+            android:textSize="18sp" android:textStyle="bold" />
         <TextView android:id="@+id/widgetToday" android:layout_width="wrap_content" android:layout_height="wrap_content"
             android:padding="7dp" android:text="Today" android:textColor="#DBCFFF" android:textSize="12sp"
-            android:background="#343049" />
+            android:background="@drawable/widget_today_bg" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:gravity="center_vertical" android:orientation="horizontal">
-        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="25dp" android:layout_height="64dp"
+        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="25dp" android:layout_height="58dp"
             android:text="‹" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
         <FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="64dp">
             <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
                 android:layout_height="match_parent" android:scaleType="fitXY"
-                android:contentDescription="Seven-day calendar with colored schedule markers" />
+                android:contentDescription="Adaptive calendar with colored schedule markers" />
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal">
                 <TextView android:id="@+id/widgetDate0" android:layout_width="0dp"
@@ -59,7 +59,7 @@
             android:text="›" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />
     </LinearLayout>
     <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
-        android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="4dp">
+        android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="9dp">
         <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
             android:orientation="vertical">
             <TextView android:id="@+id/widgetSecond" android:layout_width="match_parent"
@@ -72,23 +72,23 @@
                 android:layout_height="wrap_content" android:textColor="#9FABC4" android:textSize="10sp"
                 android:maxLines="1" />
         </LinearLayout>
-        <ImageView android:id="@+id/widgetPoster" android:layout_width="82dp" android:layout_height="100dp"
-            android:scaleType="centerCrop" android:contentDescription="Selected post original poster preview"/>
-        <LinearLayout android:layout_width="60dp" android:layout_height="wrap_content" android:orientation="vertical">
+        <ImageView android:id="@+id/widgetPoster" android:layout_width="82dp" android:layout_height="108dp" android:layout_marginStart="6dp"
+            android:scaleType="fitCenter" android:contentDescription="Selected post original poster preview"/>
+        <LinearLayout android:layout_width="66dp" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="6dp">
             <TextView android:id="@+id/widgetOpen" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="View" android:textSize="12sp" android:textColor="#FFFFFF" android:gravity="center"
-                android:padding="9dp" android:background="#6E43DA" />
+                android:padding="10dp" android:background="@drawable/widget_view_bg" />
             <TextView android:id="@+id/widgetShare" android:layout_width="match_parent" android:layout_height="wrap_content"
                 android:text="Share" android:textSize="12sp" android:textColor="#FFFFFF" android:gravity="center"
-                android:padding="9dp" android:layout_marginTop="5dp" android:background="#3E3C57" />
+                android:padding="10dp" android:layout_marginTop="8dp" android:background="@drawable/widget_share_bg" />
         </LinearLayout>
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp"
         android:orientation="horizontal" android:gravity="center_vertical">
         <TextView android:id="@+id/widgetPrevPost" android:layout_width="50dp" android:layout_height="wrap_content"
             android:text="◀" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />
         <TextView android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:text="POSTFLOW · SMART CALENDAR" android:gravity="center"
+            android:text="" android:gravity="center"
             android:textColor="#8987AB" android:textSize="9sp" />
         <TextView android:id="@+id/widgetNextPost" android:layout_width="50dp" android:layout_height="wrap_content"
             android:text="▶" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />

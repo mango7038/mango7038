@@ -126,7 +126,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         RemoteViews rv=new RemoteViews(c.getPackageName(),R.layout.widget_festival);
         rv.setTextViewText(R.id.widgetTitle,day.getMonth().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH)+" "+day.getYear());
         rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL)+" • "+(posts.isEmpty()?"No posts":(index+1)+" / "+posts.size()));
-        int shown=visibleDays(manager,id);\n        rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day,shown));
+        int shown=visibleDays(manager,id);
+        rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day,shown));
         rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-shown,0));
         rv.setOnClickPendingIntent(R.id.widgetNextWeek,broadcast(c,id,21,ACTION_DATE,shown,0));
         int[] dateCells={R.id.widgetDate0,R.id.widgetDate1,R.id.widgetDate2,R.id.widgetDate3,R.id.widgetDate4,R.id.widgetDate5,R.id.widgetDate6};

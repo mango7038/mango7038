@@ -197,6 +197,7 @@ input[type=date],input[type=time]{color-scheme:inherit}
 .pf-library-collection.is-grid .pf-post-status .tag{font-size:9px}
 @media(min-width:640px){.pf-library-collection.is-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:340px){.pf-library-collection.is-grid{gap:7px}.pf-library-collection.is-grid .pf-library-card{padding:8px}.pf-library-filter{padding:7px 9px}}
+.pf-switch-list{display:flex;flex-direction:column;gap:8px}.pf-switch-account{width:100%;display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--text);padding:12px;border-radius:15px;cursor:pointer}.pf-switch-avatar{height:39px;width:39px;display:grid;place-items:center;border-radius:50%;background:var(--soft);color:var(--primary);font-size:19px}.pf-switch-label{flex:1;min-width:0}.pf-switch-label b,.pf-switch-label small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pf-switch-label small{color:var(--muted);margin-top:4px}.pf-switch-check{color:var(--green);font-weight:900;font-size:18px}
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
@@ -519,9 +520,17 @@ function switchWorkspace(key){
 }
 function openWorkspaceSwitcher(){
  const list=instagramWorkspaces(),active=state.activeWorkspace||'';
- showModal({title:'Switch Instagram Workspace',body:'<p class="sub">Only posts for the selected account are shown. Existing scheduled jobs keep their original destination.</p>'+
- '<div class="card">'+btn('◎ All Accounts'+(!active?' ✓':''),"switchWorkspace('');closeModal()",'full secondary')+
- list.map(a=>btn('◎ '+esc(a.name)+' · '+esc(a.platform)+' '+(accountKey(a)===active?' ✓':''),"switchWorkspace('"+accountKey(a)+"');closeModal()",'full secondary')).join('')+'</div>'+btn('Sync Connected Accounts','closeModal();syncWordPressAccounts()','full')});
+ const accountButton=a=>{
+  const key=accountKey(a),label='@'+esc(a.username||a.name||'Instagram');
+  return '<button class="pf-switch-account" onclick="switchWorkspace('+JSON.stringify(key).replace(/"/g,'&quot;')+');closeModal()">'+
+   '<span class="pf-switch-avatar">◎</span><span class="pf-switch-label"><b>'+label+'</b><small>Instagram · '+esc(String(a.external_id))+'</small></span>'+
+   (key===active?'<span class="pf-switch-check">✓</span>':'')+'</button>';
+ };
+ showModal({title:'Switch Instagram Account',body:'<p class="sub">Account switching only filters the workspace. Scheduled destinations never change automatically.</p>'+
+ '<div class="pf-switch-list">'+
+ '<button class="pf-switch-account" onclick="switchWorkspace(\'\');closeModal()"><span class="pf-switch-avatar">▦</span><span class="pf-switch-label"><b>All Accounts</b><small>Unified view</small></span>'+(!active?'<span class="pf-switch-check">✓</span>':'')+'</button>'+
+ list.map(accountButton).join('')+'</div>'+
+ '<div class="actions">'+btn('Sync Accounts','closeModal();syncWordPressAccounts()','full secondary')+'</div>'});
 }
 function navRender(){
  const data=[['home','⌂','Home'],['calendar','▦','Calendar'],['compose','＋','Create'],['library','▧','Library'],['more','☷','More']];

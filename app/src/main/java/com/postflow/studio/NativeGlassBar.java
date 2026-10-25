@@ -41,11 +41,11 @@ public final class NativeGlassBar extends FrameLayout {
         for(int i=0;i<5;i++){
             final int n=i;
             TextView tab=new TextView(activity);tabs[i]=tab;
-            tab.setText(TITLES[i]);tab.setTextSize(11);
+            tab.setText(TITLES[i]);tab.setTextSize(11.5f);
             tab.setGravity(Gravity.CENTER);tab.setSingleLine(true);
             tab.setContentDescription(TITLES[i]);tab.setFocusable(true);
             LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-1,1f);
-            lp.setMargins(dp(2),dp(7),dp(2),dp(7));
+            lp.setMargins(dp(3),dp(11),dp(3),dp(11));
             items.addView(tab,lp);
             tab.setOnClickListener(v->{
                 tab.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -60,13 +60,13 @@ public final class NativeGlassBar extends FrameLayout {
         selected=index;
         for(int i=0;i<tabs.length;i++){
             final boolean active=i==index;
-            tabs[i].setTextColor(active?Color.WHITE:0xffb9bfd3);
+            tabs[i].setTextColor(active?Color.WHITE:0xffe4e7f2);
             GradientDrawable pill=new GradientDrawable();
-            pill.setColor(active?0xcc655ac9:Color.TRANSPARENT);
-            pill.setCornerRadius(dp(19));
+            pill.setColor(active?0xff6455bb:Color.TRANSPARENT);
+            pill.setCornerRadius(dp(16));
             if(active)pill.setStroke(dp(1),0x40ffffff);
             tabs[i].setBackground(pill);
-            tabs[i].animate().scaleX(active?1.03f:1f).scaleY(active?1.03f:1f).setDuration(220).start();
+            tabs[i].animate().scaleX(active?1.015f:1f).scaleY(active?1.015f:1f).setDuration(220).start();
         }
     }
     private static final class Surface extends View {
@@ -86,22 +86,28 @@ public final class NativeGlassBar extends FrameLayout {
                        "half3 halo=half3(.30,.45,.80)*exp(-10.*length(uv-half2(.22,.0)));"+
                        "half dispersion=half(sin(uv.x*18.+uv.y*7.)*.02);"+
                        "half3 light=half3(.35+dispersion,.43,.64-dispersion)*half(rim);"+
-                       "return half4(base+halo*.55+light*.48+half(wave*.3),.985);}");
+                       "return half4(base+halo*.35+light*.30+half(wave*.18),.82);}");
                 }catch(Exception ignored){glass=null;}
             }
         }
         @Override protected void onDraw(Canvas canvas){
             super.onDraw(canvas);
             float r=28*density;
+            // Draw an *opaque* foundation first: no WebView text can bleed through
+            // even if a manufacturer WebView/AGSL compositor has weak blur support.
+            paint.setShader(null);
+            paint.setStyle(Paint.Style.FILL);
+            paint.setColor(0xff171d34);
+            canvas.drawRoundRect(0,0,getWidth(),getHeight(),r,r,paint);
             if(Build.VERSION.SDK_INT>=33 && glass!=null){
                 glass.setFloatUniform("size",(float)Math.max(1,getWidth()),(float)Math.max(1,getHeight()));
                 paint.setShader(glass);
             }else{
-                paint.setShader(new LinearGradient(0,0,getWidth(),getHeight(),new int[]{0xfa252a45,0xfd141a30},null,Shader.TileMode.CLAMP));
+                paint.setShader(new LinearGradient(0,0,getWidth(),getHeight(),new int[]{0xe82a304e,0xea191f37},null,Shader.TileMode.CLAMP));
             }
             canvas.drawRoundRect(0,0,getWidth(),getHeight(),r,r,paint);
             paint.setShader(null);
-            paint.setColor(0x66ffffff);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(density);
+            paint.setColor(0x3cffffff);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(density);
             canvas.drawRoundRect(density,density,getWidth()-density,getHeight()-density,r,r,paint);
             paint.setStyle(Paint.Style.FILL);
         }

@@ -1414,10 +1414,10 @@ async function importZipAfterReview(){
        captionWarnings.push('Duplicate basename needs exact path in TXT: '+safeFileName(f.name));rec=null;
      }
      const approved=reviewMap.get(f.name);
-     const reviewedRec=approved&&approved.problems.length===0?{...approved,filename:f.name,platform:approved.platforms.join(',')}:null;
+     let reviewedRec=approved&&approved.problems.length===0?{...approved,filename:f.name,platform:approved.platforms.join(',')}:null;
      // Never ignore a manifest account constraint while scheduling.
      const accountHint=String(rec?.account_id||rec?.account||'').trim();
-     if(accountHint){const connected=(state.wpAccounts||[]).find(a=>a.platform==='instagram'&&(String(a.external_id)===accountHint||String(a.username||a.name||'').replace(/^@/,'').toLowerCase()===accountHint.replace(/^@/,'').toLowerCase()));if(!connected||!activeWorkspace()||accountKey(connected)!==state.activeWorkspace){captionWarnings.push('Account mismatch for '+safeFileName(f.name)+'; saved as draft');approved&&(approved.problems=[...approved.problems,'Account mismatch']);}}
+     if(accountHint){const connected=(state.wpAccounts||[]).find(a=>a.platform==='instagram'&&(String(a.external_id)===accountHint||String(a.username||a.name||'').replace(/^@/,'').toLowerCase()===accountHint.replace(/^@/,'').toLowerCase()));if(!connected||!activeWorkspace()||accountKey(connected)!==state.activeWorkspace){captionWarnings.push('Account mismatch for '+safeFileName(f.name)+'; saved as draft');reviewedRec=null;}}
      const mappedTargets=festivalPostTargets(reviewedRec,targets);if(mappedTargets.warning)captionWarnings.push(safeFileName(f.name)+': '+mappedTargets.warning);
      let date=approved?.date||rec?.date||parseManifestDate(meta.date)||guessDate(safeFileName(f.name))||guessDate(f.name),category=meta.category||pickCategory(approved?.title||rec?.title||f.name);
      let title=String(approved?.title||rec?.title||meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);

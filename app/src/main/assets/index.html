@@ -199,6 +199,24 @@ input[type=date],input[type=time]{color-scheme:inherit}
 @media(max-width:340px){.pf-library-collection.is-grid{gap:7px}.pf-library-collection.is-grid .pf-library-card{padding:8px}.pf-library-filter{padding:7px 9px}}
 .pf-switch-list{display:flex;flex-direction:column;gap:8px}.pf-switch-account{width:100%;display:flex;align-items:center;gap:12px;text-align:left;border:1px solid var(--line);background:var(--surface);color:var(--text);padding:12px;border-radius:15px;cursor:pointer}.pf-switch-avatar{height:39px;width:39px;display:grid;place-items:center;border-radius:50%;background:var(--soft);color:var(--primary);font-size:19px}.pf-switch-label{flex:1;min-width:0}.pf-switch-label b,.pf-switch-label small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pf-switch-label small{color:var(--muted);margin-top:4px}.pf-switch-check{color:var(--green);font-weight:900;font-size:18px}
 
+
+/* Interactive chrome: keep dense tables, calendars, editors solid for readability. */
+:root{--pf-solid-panel:var(--surface)}
+header .circle,nav#nav .navItem.active,.sheet-head .x{position:relative;overflow:hidden}
+header .circle:before,nav#nav .navItem.active:before{content:"";position:absolute;inset:0;pointer-events:none;border-radius:inherit;background:linear-gradient(130deg,rgba(255,255,255,.34),rgba(255,255,255,0) 46%,rgba(255,255,255,.055) 95%)}
+.hero-create,.pf-switch-account{border:1px solid var(--glass-line)!important;border-radius:22px!important;box-shadow:inset 0 1px 1px var(--glass-shine),0 10px 24px rgba(10,14,36,.09)!important}
+.pf-switch-account{transition:transform .24s var(--glass-ease),background .25s ease,box-shadow .25s ease!important}
+.pf-switch-account:active{transform:scale(.985)}
+.sheet input,.sheet textarea,.sheet select{scroll-margin-bottom:25vh}
+#page,.card,.stat,.field,.sheet,.pf-switch-label{min-width:0}
+#page img,.sheet img{max-width:100%}
+.modal .sheet{overscroll-behavior:contain;scrollbar-gutter:stable}
+@media(max-height:560px){.sheet{max-height:calc(100dvh - 14px)!important}}
+@media(max-width:420px){.sheet{padding-left:14px!important;padding-right:14px!important}main{padding-left:13px!important;padding-right:13px!important}}
+@supports(height:100dvh){.modal{height:100dvh}}
+@media(prefers-contrast:more){:root{--glass-line:rgba(255,255,255,.65)}:root[data-theme="light"]{--glass-line:rgba(32,41,70,.58)}}
+@media(prefers-reduced-transparency:reduce){header,nav#nav,.sheet,.glass-card,.glass-surface,.glass-dialog,.glass-button{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:var(--surface)!important}}
+
 /* PostFlow Liquid Glass Design System v7.8 — live backdrop compositing on supported WebView */
 :root{--glass-fill:rgba(30,35,61,.58);--glass-line:rgba(255,255,255,.20);--glass-shine:rgba(255,255,255,.25);--glass-shadow:0 12px 35px rgba(0,0,0,.20);--glass-radius:22px;--glass-blur:22px;--glass-ease:cubic-bezier(.22,1,.36,1)}
 :root[data-theme="light"]{--glass-fill:rgba(249,251,255,.64);--glass-line:rgba(255,255,255,.83);--glass-shine:rgba(255,255,255,.95);--glass-shadow:0 13px 35px rgba(51,62,100,.13)}

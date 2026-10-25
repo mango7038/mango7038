@@ -72,7 +72,12 @@ jobs:
           for(const hook of ['function render()', 'function postItem(p)', 'function pfLibraryControls()', 'function pfLibraryItems()', 'function exportBackup()', 'function openHealthMonitor()']){
             assert(script.includes(hook),'Required feature missing: '+hook);
           }
-          console.log('JavaScript syntax and critical UI hooks verified');
+          for(const glass of ['GlassSurface','GlassButton','GlassCard','GlassBottomBar','GlassDialog','backdrop-filter:blur','prefers-reduced-motion','prefers-reduced-transparency','pf-sheet-rise','pf-scrolled']){
+            assert(html.includes(glass),'Liquid Glass regression: '+glass);
+          }
+          assert(html.includes("window.addEventListener('scroll'"),'Scroll-responsive chrome missing');
+          assert(html.includes('nav#nav'), 'Floating navigation rules missing');
+          console.log('JavaScript syntax, core features and Liquid Glass UI regression hooks verified');
           NODE
       - name: Build permanently signed release APK
         run: gradle --no-daemon --stacktrace :app:assembleRelease

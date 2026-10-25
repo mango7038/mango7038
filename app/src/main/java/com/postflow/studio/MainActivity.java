@@ -54,6 +54,13 @@ public final class MainActivity extends Activity {
         settings.setAllowUniversalAccessFromFileURLs(false);
         web.addJavascriptInterface(new NativeBridge(this), "PostFlowNative");
         web.setWebViewClient(new WebViewClient(){
+            @Override public void onPageFinished(WebView view,String url){
+                super.onPageFinished(view,url);
+                if(url!=null && url.startsWith("file:///android_asset/")){
+                    // Make the native bar the sole navigation; prevent the HTML bar showing beneath it.
+                    view.evaluateJavascript("document.body.classList.add('native-glass');document.querySelector('#nav')?.setAttribute('aria-hidden','true');",null);
+                }
+            }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request){
                 Uri url=request.getUrl();
                 if ("file".equals(url.getScheme())) return false;
@@ -110,6 +117,17 @@ public final class MainActivity extends Activity {
         glassRoot=new android.widget.FrameLayout(this);
         if(web.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)web.getParent()).removeView(web);
         glassRoot.addView(web,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        // Fade the scrolled page below the fixed bar to keep navigation text legible.
+        android.view.View bottomScrim=new android.view.View(this);
+        android.graphics.drawable.GradientDrawable fade=new android.graphics.drawable.GradientDrawable(
+            android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
+            new int[]{0x000b1020,0xb80b1020,0xf90b1020,0xff0b1020});
+        bottomScrim.setBackground(fade);
+        bottomScrim.setClickable(false);
+        bottomScrim.setFocusable(false);
+        android.widget.FrameLayout.LayoutParams scrimParams=new android.widget.FrameLayout.LayoutParams(
+            -1,Math.round(152*getResources().getDisplayMetrics().density),android.view.Gravity.BOTTOM);
+        glassRoot.addView(bottomScrim,scrimParams);
         glassBar=new NativeGlassBar(this,index->{
             String code;
             switch(index){

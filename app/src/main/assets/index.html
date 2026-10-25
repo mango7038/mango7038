@@ -249,6 +249,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}#page,.sheet,.modal{animation:none!important}nav#nav .navItem .ico{transition:none!important}header{transition:none!important}}
 @supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){header,nav#nav,.sheet,.glass-surface,.glass-card,.glass-button,.glass-dialog{background:var(--surface)!important}}
 
+body.native-glass nav#nav{display:none!important}body.native-glass main{padding-bottom:max(104px,env(safe-area-inset-bottom))!important}
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
@@ -598,6 +599,13 @@ function openWorkspaceSwitcher(){
  '<div class="actions">'+btn('Sync Accounts','closeModal();syncWordPressAccounts()','full secondary')+'</div>'});
 }
 function navRender(){
+ if(window.PostFlowNative?.glassTab){
+   try{
+     document.body.classList.add('native-glass');
+     const tabs={home:0,calendar:1,library:3};
+     PostFlowNative.glassTab(Object.prototype.hasOwnProperty.call(tabs,page)?tabs[page]:4);
+   }catch(e){console.warn('Native navigation unavailable',e)}
+ }
  const data=[['home','⌂','Home'],['calendar','▦','Calendar'],['compose','＋','Create'],['library','▧','Library'],['more','☷','More']];
  document.getElementById('nav').innerHTML=data.map(([id,ico,title])=>{
   const active=id==='more'?(!['home','calendar','library'].includes(page)):page===id;
@@ -647,8 +655,10 @@ function nextEvents(){let today=dateLocal();return [...state.events].map(e=>({..
 function calendarRender(el){let y=calMonth.getFullYear(),m=calMonth.getMonth(),start=(new Date(y,m,1).getDay()+6)%7,last=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate(),monthstr=calMonth.toLocaleDateString('en-IN',{month:'long',year:'numeric'});let cells='';for(let i=0;i<42;i++){let day=i-start+1,d=new Date(y,m,day),s=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`,n=workspacePosts(state.posts).filter(p=>p.date===s).length+state.events.filter(e=>e.date===s||(e.repeat&&e.date.slice(5)===s.slice(5))).length;cells+=`<button class="day ${day<1||day>last?'disabled':''} ${s===dateLocal()?'today':''} ${s===selectedDay?'selected':''}" onclick="selectDay('${s}')"><strong>${d.getDate()}</strong><small>${n?n+' ●':''}</small></button>`}el.innerHTML=`<h2>Content Calendar</h2><p class="sub">Scheduled posts, festivals, custom events and birthdays.</p><div class="card"><div class="monthnav"><button onclick="changeMonth(-1)">‹</button><b>${monthstr}</b><button onclick="changeMonth(1)">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(d=>`<div class="week">${d}</div>`).join('')}${cells}</div></div><div class="section"><h3>${selectedDay?fmt(selectedDay):'Select a date'}</h3><a onclick="editEvent()">Add Event +</a></div><div class="card">${selectedDay?([ ...workspacePosts(state.posts).filter(p=>p.date===selectedDay).map(postItem),...state.events.filter(e=>e.date===selectedDay||(e.repeat&&e.date.slice(5)===selectedDay.slice(5))).map(eventItem)].join('')||'<div class="empty">Nothing planned on this date.</div>'):'<div class="empty">Tap any date to view or edit scheduled content.</div>'}</div>`}
 function changeMonth(d){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+d,1);render()}
 function selectDay(d){selectedDay=d;render()}
-function showModal(html){document.getElementById('overlay').innerHTML=`<div class="modal"><div class="sheet"><div class="sheet-head"><h3>${html.title}</h3><button class="x" onclick="closeModal()">×</button></div>${html.body}</div></div>`;document.body.classList.add('no-scroll')}
-function closeModal(){if(typeof carouselPreviewUrls!=='undefined'){carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];}document.getElementById('overlay').innerHTML='';document.body.classList.remove('no-scroll')}
+function showModal(html){try{window.PostFlowNative?.glassNavigation?.(false)}catch(e){}
+ document.getElementById('overlay').innerHTML=`<div class="modal"><div class="sheet"><div class="sheet-head"><h3>${html.title}</h3><button class="x" onclick="closeModal()">×</button></div>${html.body}</div></div>`;document.body.classList.add('no-scroll')}
+function closeModal(){try{window.PostFlowNative?.glassNavigation?.(true)}catch(e){}
+ if(typeof carouselPreviewUrls!=='undefined'){carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];}document.getElementById('overlay').innerHTML='';document.body.classList.remove('no-scroll')}
 function compose(){editedPosterFile=null;clearSelectedMediaSnapshot();posterPendingLayers=null;pendingCarouselFiles=[];editPost(null)}
 function placementsForAccount(a){let platform=a.platform;
  if(platform==='Instagram')return DEST.filter(x=>x[0].startsWith('ig_'));

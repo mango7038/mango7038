@@ -32,6 +32,7 @@ public final class MainActivity extends Activity {
     private static final int BACKUP_PICKER = 2003;
     private WebView web;
     private NativeGlassBar glassBar;
+    private android.view.View glassScrim;
     private android.widget.FrameLayout glassRoot;
     WebView getWebViewForBridge(){return web;}
     private ValueCallback<Uri[]> fileCallback;
@@ -118,16 +119,16 @@ public final class MainActivity extends Activity {
         if(web.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)web.getParent()).removeView(web);
         glassRoot.addView(web,new android.widget.FrameLayout.LayoutParams(-1,-1));
         // Fade the scrolled page below the fixed bar to keep navigation text legible.
-        android.view.View bottomScrim=new android.view.View(this);
+        glassScrim=new android.view.View(this);
         android.graphics.drawable.GradientDrawable fade=new android.graphics.drawable.GradientDrawable(
             android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM,
             new int[]{0x000b1020,0xb80b1020,0xf90b1020,0xff0b1020});
-        bottomScrim.setBackground(fade);
-        bottomScrim.setClickable(false);
-        bottomScrim.setFocusable(false);
+        glassScrim.setBackground(fade);
+        glassScrim.setClickable(false);
+        glassScrim.setFocusable(false);
         android.widget.FrameLayout.LayoutParams scrimParams=new android.widget.FrameLayout.LayoutParams(
             -1,Math.round(152*getResources().getDisplayMetrics().density),android.view.Gravity.BOTTOM);
-        glassRoot.addView(bottomScrim,scrimParams);
+        glassRoot.addView(glassScrim,scrimParams);
         glassBar=new NativeGlassBar(this,index->{
             String code;
             switch(index){
@@ -148,7 +149,11 @@ public final class MainActivity extends Activity {
         setContentView(glassRoot);
     }
     void setGlassNavigationVisible(boolean visible){
-        runOnUiThread(()->{if(glassBar!=null)glassBar.setVisibility(visible?android.view.View.VISIBLE:android.view.View.GONE);});
+        runOnUiThread(()->{
+            int visibility=visible?android.view.View.VISIBLE:android.view.View.GONE;
+            if(glassBar!=null)glassBar.setVisibility(visibility);
+            if(glassScrim!=null)glassScrim.setVisibility(visibility);
+        });
     }
     void setGlassSelectedTab(int index){
         runOnUiThread(()->{if(glassBar!=null)glassBar.select(index);});

@@ -111,11 +111,11 @@ jobs:
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/postflow-badging.txt"
           head -n 15 "$RUNNER_TEMP/postflow-badging.txt"
           grep -q "name='com.postflow.studio.permanent'" "$RUNNER_TEMP/postflow-badging.txt"
-          grep -q "versionCode='13'" "$RUNNER_TEMP/postflow-badging.txt"
+          grep -q "versionCode='14'" "$RUNNER_TEMP/postflow-badging.txt"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-7.9.2-publishing-status-clarity
+          name: PostFlow-Studio-8.0.0-four-phase
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

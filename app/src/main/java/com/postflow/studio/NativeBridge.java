@@ -86,8 +86,8 @@ public final class NativeBridge {
             try{
                 if(!MediaContentProvider.valid(mediaId)||!clientId.matches("[A-Za-z0-9_-]{12,100}")
                     ||!java.util.Arrays.asList("facebook","instagram","google").contains(platform)
-                    ||!java.util.Arrays.asList("feed","reel","story").contains(placement)
-                    ||!externalId.matches("[0-9]{2,40}"))throw new IOException("Invalid job details");
+                    ||!(platform.equals("google") ? placement.equals("update") : java.util.Arrays.asList("feed","reel","story").contains(placement))
+                    ||!(platform.equals("google") ? externalId.matches("accounts/[0-9]+/locations/[0-9]+") : externalId.matches("[0-9]{2,40}")))throw new IOException("Invalid job details");
                 File media=MediaContentProvider.mediaFile(activity,mediaId);
                 if(!media.isFile()||media.length()>100L*1024*1024)throw new IOException("Original media unavailable or too large");
                 String storedName=activity.getSharedPreferences("postflow_media",0).getString(mediaId,"media.jpg");

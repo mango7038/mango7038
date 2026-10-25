@@ -89,6 +89,8 @@ jobs:
           assert(html.includes('Check server jobs'), 'Publishing troubleshooting action missing');
           console.log('JavaScript syntax, core features, glass navigation and local-vs-server status checks passed');
           NODE
+      - name: Four-phase integration guardrails
+        run: node tests/fourphase-guardrails.test.js
       - name: Build permanently signed release APK
         run: gradle --no-daemon --stacktrace :app:assembleRelease
       - name: Validate APK signature

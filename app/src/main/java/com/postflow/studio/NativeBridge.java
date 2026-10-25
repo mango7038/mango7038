@@ -85,7 +85,7 @@ public final class NativeBridge {
             java.net.HttpURLConnection c=null;
             try{
                 if(!MediaContentProvider.valid(mediaId)||!clientId.matches("[A-Za-z0-9_-]{12,100}")
-                    ||!java.util.Arrays.asList("facebook","instagram").contains(platform)
+                    ||!java.util.Arrays.asList("facebook","instagram","google").contains(platform)
                     ||!java.util.Arrays.asList("feed","reel","story").contains(placement)
                     ||!externalId.matches("[0-9]{2,40}"))throw new IOException("Invalid job details");
                 File media=MediaContentProvider.mediaFile(activity,mediaId);

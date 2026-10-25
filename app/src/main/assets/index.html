@@ -259,6 +259,9 @@ nav#nav{background:var(--glass-fill)!important;box-shadow:0 10px 30px rgba(0,0,0
 nav#nav .navItem{color:var(--text)!important;text-shadow:none!important}
 nav#nav .navItem.active{color:#fff!important}
 body:not(.native-glass) main{padding-bottom:calc(155px + env(safe-area-inset-bottom))!important}
+/* Separate local calendar reminders from confirmed server jobs. */
+.pf-local-warning{margin:10px 0 0;padding:10px 12px;border-radius:12px;border:1px solid rgba(234,147,158,.38);background:rgba(125,43,69,.12);color:var(--text);font-size:12px;line-height:1.5}
+.pf-local-warning button{display:inline-block;margin:5px 0 0;padding:7px 10px;border:1px solid var(--glass-line);border-radius:10px;background:var(--surface);color:var(--text);font-size:12px;font-weight:650}
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
@@ -360,7 +363,7 @@ function animatePageEnter(){const el=document.getElementById('page');if(!el)retu
 function toast(msg){let el=document.getElementById('toast');el.textContent=msg;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),2900)}
 function btn(label,fn,cls='secondary'){return `<button class="btn ${cls}" onclick="${fn}">${label}</button>`}
 function media(p){return p.thumb?`<img class="thumb" src="${p.thumb}">`:`<div class="thumb">${p.kind==='reel'?'▶':'▧'}</div>`}
-function tag(p){const tracked=postTrackingState(p);if(tracked==='published')return '<span class="tag green">Verified Published ✓</span>';if(tracked==='verification')return '<span class="tag">Verification pending</span>';if(tracked==='failed'||tracked==='partial')return '<span class="tag red">Publishing needs attention</span>';if(tracked==='processing')return '<span class="tag">Processing</span>';if(tracked==='uploading')return '<span class="tag">Uploading…</span>';if(tracked==='scheduled')return '<span class="tag green">Scheduled on server</span>';return p.status==='published'?'<span class="tag">Locally marked published · unverified</span>':p.status==='awaiting_verification'?'<span class="tag">Verification pending</span>':p.status==='uploading'?'<span class="tag">Preparing upload…</span>':p.status==='processing'?'<span class="tag">Processing</span>':p.status==='attention'?'<span class="tag red">Needs attention</span>':p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">Reminder due</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':'<span class="tag green">Scheduled</span>'}
+function tag(p){const tracked=postTrackingState(p);if(tracked==='published')return '<span class="tag green">Verified Published ✓</span>';if(tracked==='verification')return '<span class="tag">Verification pending</span>';if(tracked==='failed'||tracked==='partial')return '<span class="tag red">Publishing needs attention</span>';if(tracked==='processing')return '<span class="tag">Processing</span>';if(tracked==='uploading')return '<span class="tag">Uploading…</span>';if(tracked==='scheduled')return '<span class="tag green">Scheduled on server</span>';return p.status==='published'?'<span class="tag">Locally marked published · unverified</span>':p.status==='awaiting_verification'?'<span class="tag">Verification pending</span>':p.status==='uploading'?'<span class="tag">Preparing upload…</span>':p.status==='processing'?'<span class="tag">Processing</span>':p.status==='attention'?'<span class="tag red">Needs attention</span>':p.status==='draft'?'<span class="tag">Draft</span>':p.status==='paused'?'<span class="tag red">Paused</span>':due(p)?'<span class="tag red">No linked server job · overdue</span>':p.status==='manually_posted'?'<span class="tag green">Manual ✓</span>':p.status==='scheduled'&&!localPublishingJobs(p).length?'<span class="tag">Local calendar only</span>':'<span class="tag green">Scheduled</span>'}
 let pfLibraryView='list',pfLibraryFilter='all';
 function pfLibrarySetView(view){pfLibraryView=view==='grid'?'grid':'list';render();}
 function pfLibrarySetFilter(filter){pfLibraryFilter=filter;render();}
@@ -397,6 +400,7 @@ function postItem(p){
    <div class="pf-post-detail"><span>◷ ${fmt(p.date)} · ${esc(p.time||'09:00')} IST</span><span>${esc(channels)}</span></div>
    <div class="pf-post-status">${tag(p)}</div>
   </div>
+  ${!bulkMode&&due(p)?'<div class="pf-local-warning" role="note">No linked WordPress publishing job. This calendar entry alone does not auto-post. <button type="button" onclick="event.stopPropagation();refreshPublishJobs()">Check server jobs</button></div>':''}
  </article>`;
 }
 function eventItem(ev){return `<div class="item" onclick="editEvent('${ev.id}')"><div class="thumb">${ev.type==='birthday'?'🎂':ev.type==='festival'?'🪔':'📆'}</div><div class="body"><b>${esc(ev.title)}</b><small>${fmt(ev.date)}${ev.repeat?' • Yearly':''}</small></div><span class="tag">${esc(ev.type)}</span></div>`}

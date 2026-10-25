@@ -93,6 +93,7 @@ public final class NativeBridge {
                 String storedName=activity.getSharedPreferences("postflow_media",0).getString(mediaId,"media.jpg");
                 String ext=storedName.toLowerCase(java.util.Locale.ROOT);
                 String mime=ext.endsWith(".png")?"image/png":ext.endsWith(".mp4")?"video/mp4":ext.endsWith(".mov")?"video/quicktime":"image/jpeg";
+                if(platform.equals("google")&&!mime.startsWith("image/"))throw new IOException("Google Business Profile update needs an image.");
                 String boundary="PFC"+java.util.UUID.randomUUID().toString().replace("-","");
                 java.net.URL url=new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs");
                 c=(java.net.HttpURLConnection)url.openConnection();

@@ -22,6 +22,9 @@ public final class NativeBridge {
     private final MainActivity activity;
     private final Map<String,FileOutputStream> streams=new HashMap<>();
     NativeBridge(MainActivity activity){this.activity=activity;}
+    @JavascriptInterface public void glassNavigation(boolean visible){activity.setGlassNavigationVisible(visible);}
+    @JavascriptInterface public void glassTab(int index){activity.setGlassSelectedTab(index);}
+
 
 
     /** Pairing credential is stored in Android Keystore-backed encrypted preferences when available. */

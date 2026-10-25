@@ -424,8 +424,12 @@ function openHealthMonitor(){
  const active=activeWorkspace(),accounts=(state.wpAccounts||[]).filter(a=>!active||accountKey(a)===accountKey(active));
  const now=Date.now();
  const expiring=accounts.filter(a=>{const raw=Number(a.expires||a.token_expires_at||0);if(!raw)return false;const millis=raw<1e12?raw*1000:raw;return millis<=now+7*86400000;});
+ const serverHealth=state.wpServerHealth||null;
+ const cronNotice=serverHealth?(serverHealth.scheduler_healthy?'✓ Server queue heartbeat received.':'⚠ WordPress publishing queue is stale. Configure hosting cron every minute.'):'No server heartbeat available. Update WordPress plugin and refresh.';
+ const overdueCount=serverHealth?Number(serverHealth.overdue_jobs_count||0):null;
  showModal({title:'Publishing Health',body:
- '<p class="sub">Server-reported results, never assumed publication. This screen cannot confirm WP-Cron ran without server telemetry.</p>'+
+ '<p class="sub">Server-reported results, never assumed publication.</p>'+
+ '<div class="note"><b>Publishing scheduler:</b> '+esc(cronNotice)+(overdueCount!==null?'<p>Overdue server jobs: '+overdueCount+'</p>':'')+'</div>'+
  '<div class="pf-metrics">'+counts.map(([name,n])=>'<div class="pf-metric"><strong>'+n+'</strong><small>'+esc(name)+'</small></div>').join('')+'</div>'+
  '<div class="note">Last jobs sync: '+esc(refreshed)+(stale?'<p>⚠ Status may be stale. Refresh before retrying or rescheduling.</p>':'')+
  (state.wpJobsLastError?'<p>Last request error: '+esc(state.wpJobsLastError)+'</p>':'')+'</div>'+
@@ -1082,7 +1086,14 @@ function parseFestivalPostTxt(raw){
  const records=[],warnings=[],seen=new Set();
  const lines=String(raw||'').replace(/^\uFEFF/,'').replace(/\r\n?/g,'\n').split('\n');
  let current=null,lastField=null;
- const close=()=>{if(!current)return;current.filename=String(current.filename||'').trim().replace(/\\/g,'/');
+ const close=()=>{if(!current)return;
+   if(current.placement){
+     const placement=String(current.placement).toLowerCase().trim();
+     if(!['story','feed','post','reel','carousel'].includes(placement)){warnings.push('Unsupported placement for '+(current.filename||'unnamed post')+': '+placement);current.invalidPlacement=true;}
+     else {current.type=placement==='feed'?'post':placement;current.placement=placement;}
+   }
+   if(current.timezone&&!['Asia/Kolkata','IST','+05:30'].includes(String(current.timezone).trim())){warnings.push('Unsupported timezone for '+(current.filename||'unnamed post')+': '+current.timezone);current.invalidTimezone=true;}
+   current.filename=String(current.filename||'').trim().replace(/\\/g,'/');
    if(!current.filename){warnings.push('TXT [POST] without filename skipped');current=null;return;}
    if(seen.has(current.filename))warnings.push('Duplicate [POST] filename: '+current.filename);
    seen.add(current.filename);records.push(current);current=null;lastField=null;
@@ -1091,8 +1102,8 @@ function parseFestivalPostTxt(raw){
    if(/^\s*\[POST\]\s*$/i.test(line)){close();current={};lastField=null;continue;}
    if(/^\s*\[\/POST\]\s*$/i.test(line)){close();continue;}
    if(!current||!line.trim()&&lastField!=='caption'&&lastField!=='greeting')continue;
-   const field=line.match(/^\s*(filename|title|type|platform|date|time|greeting|caption)\s*=(.*)$/i);
-   if(field){lastField=field[1].toLowerCase();current[lastField]=field[2].trim();}
+   const field=line.match(/^\s*(filename|title|type|placement|platform|timezone|account|account_id|date|time|greeting|caption)\s*=(.*)$/i);
+   if(field){lastField=field[1].toLowerCase();const raw=field[2].trim();current[lastField]=(lastField==='caption'||lastField==='greeting')?raw:raw.replace(/;\s*$/,'').trim();}
    else if((lastField==='caption'||lastField==='greeting'))current[lastField]+='\n'+line;
    else if(line.trim())warnings.push('Unexpected TXT line: '+line.slice(0,70));
  }
@@ -1324,6 +1335,9 @@ async function processZip(){
     if(!validFestivalDateTime(date,time))problems.push('Invalid date or time');
     const kind=String(r?.type||'post').toLowerCase();
     if(!['post','story'].includes(kind))problems.push('Unsupported post type');
+    if(r?.invalidTimezone)problems.push('Unsupported timezone; use Asia/Kolkata');
+    if(r?.invalidPlacement)problems.push('Unsupported placement in TXT');
+    if(r?.account_id||r?.account){const matchedAccount=String(r.account_id||r.account);const connected=(state.wpAccounts||[]).find(a=>a.platform==='instagram'&&(String(a.external_id)===matchedAccount||String(a.username||a.name||'').replace(/^@/,'').toLowerCase()===matchedAccount.replace(/^@/,'').toLowerCase()));if(!connected)problems.push('Specified Instagram account not connected');else if(activeWorkspace()&&accountKey(connected)!==state.activeWorkspace)problems.push('ZIP account does not match selected workspace');}
     const platforms=String(r?.platform||'instagram').toLowerCase().split(/[,|;]/).map(x=>x.trim()).filter(Boolean);
     if(platforms.some(x=>!['instagram','facebook'].includes(x)))problems.push('Unsupported platform');
     return {path:e.name,title,date,time,type:kind,platforms,caption:r?.caption??plain.caption??meta.caption??makeCaption(title,pickCategory(title)),greeting:r?.greeting||'',problems};
@@ -1401,6 +1415,9 @@ async function importZipAfterReview(){
      }
      const approved=reviewMap.get(f.name);
      const reviewedRec=approved&&approved.problems.length===0?{...approved,filename:f.name,platform:approved.platforms.join(',')}:null;
+     // Never ignore a manifest account constraint while scheduling.
+     const accountHint=String(rec?.account_id||rec?.account||'').trim();
+     if(accountHint){const connected=(state.wpAccounts||[]).find(a=>a.platform==='instagram'&&(String(a.external_id)===accountHint||String(a.username||a.name||'').replace(/^@/,'').toLowerCase()===accountHint.replace(/^@/,'').toLowerCase()));if(!connected||!activeWorkspace()||accountKey(connected)!==state.activeWorkspace){captionWarnings.push('Account mismatch for '+safeFileName(f.name)+'; saved as draft');approved&&(approved.problems=[...approved.problems,'Account mismatch']);}}
      const mappedTargets=festivalPostTargets(reviewedRec,targets);if(mappedTargets.warning)captionWarnings.push(safeFileName(f.name)+': '+mappedTargets.warning);
      let date=approved?.date||rec?.date||parseManifestDate(meta.date)||guessDate(safeFileName(f.name))||guessDate(f.name),category=meta.category||pickCategory(approved?.title||rec?.title||f.name);
      let title=String(approved?.title||rec?.title||meta.title||'').trim()||titleFromName(f.name),video=/\.(mp4|mov)$/i.test(f.name);
@@ -1529,7 +1546,7 @@ window.onPostFlowPublish=function(raw){
   const r=JSON.parse(raw);
   if(r.mutation){if(r.ok&&r.job){state.wpServerJobs=(state.wpServerJobs||[]).map(j=>Number(j.id)===Number(r.job_id)?r.job:j);for(const local of Object.values(state.wpPendingJobs||{})){if(Number(local.serverId)===Number(r.job_id)){local.status=r.job.status;local.scheduled_at=r.job.scheduled_at;local.error=r.job.error||'';}}save();toast(r.mutation==='DELETE'?'Scheduled job cancelled on WordPress':'WordPress job updated');showJobDetail(Number(r.job_id));}else{toast(r.error||'Update was rejected');showJobDetail(Number(r.job_id));}return;}
   if(r.client_id){const j=(state.wpPendingJobs||{})[r.client_id];if(j){j.status=r.ok?(r.job?.status||'scheduled'):'upload_failed';j.serverId=r.job?.id||null;j.error=r.error||'';if(j.postId){const p=state.posts.find(x=>x.id===j.postId);if(p){const others=Object.values(state.wpPendingJobs||{}).filter(x=>x.postId===j.postId);p.status=others.every(x=>x.status==='upload_failed')?'draft':others.some(x=>x.status==='uploading')?'uploading':'scheduled';}}}reconcileServerJobs();save();toast(r.ok?'WordPress accepted the publishing job':r.error||'Upload failed');if(page==='accounts')render();}
-  else if(Array.isArray(r.jobs)){state.wpJobsLastSyncAt=Date.now();state.wpJobsLastError='';state.wpServerJobs=r.jobs;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();if(silentJobsRefresh){silentJobsRefresh=false;if(['home','queue','library'].includes(page))render();}else showPublishJobs();}
+  else if(Array.isArray(r.jobs)){state.wpJobsLastSyncAt=Date.now();state.wpJobsLastError='';state.wpServerJobs=r.jobs;state.wpServerHealth=r.health||null;for(const j of r.jobs){const local=(state.wpPendingJobs||{})[j.client_job_id];if(local){local.status=j.status;local.published_at=j.published_at||0;local.scheduled_at=j.scheduled_at||local.scheduled_at;local.serverId=j.id;local.error=j.error||'';}}reconcileServerJobs();save();if(silentJobsRefresh){silentJobsRefresh=false;if(['home','queue','library'].includes(page))render();}else showPublishJobs();}
   else if(r.error){state.wpJobsLastError=String(r.error).slice(0,400);save();if(!silentJobsRefresh)toast(r.error);silentJobsRefresh=false;}
  }catch(e){toast('Unexpected publishing response');}
 };

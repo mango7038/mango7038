@@ -249,11 +249,16 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}#page,.sheet,.modal{animation:none!important}nav#nav .navItem .ico{transition:none!important}header{transition:none!important}}
 @supports not ((backdrop-filter:blur(2px)) or (-webkit-backdrop-filter:blur(2px))){header,nav#nav,.sheet,.glass-surface,.glass-card,.glass-button,.glass-dialog{background:var(--surface)!important}}
 
-body.native-glass nav#nav{display:none!important}body.native-glass main{padding-bottom:max(104px,env(safe-area-inset-bottom))!important}
-:root{--glass-fill:rgba(27,32,53,.91);--glass-line:rgba(255,255,255,.16);--glass-shadow:0 12px 32px rgba(0,0,0,.18)}
-:root[data-theme="light"]{--glass-fill:rgba(247,249,255,.92)}
+body.native-glass nav#nav{display:none!important}body.native-glass main{padding-bottom:calc(190px + env(safe-area-inset-bottom))!important}
+:root{--glass-fill:rgba(23,29,49,.975);--glass-line:rgba(255,255,255,.16);--glass-shadow:0 12px 32px rgba(0,0,0,.18)}
+:root[data-theme="light"]{--glass-fill:rgba(247,249,255,.975)}
 nav#nav{backdrop-filter:blur(26px) saturate(118%)!important;-webkit-backdrop-filter:blur(26px) saturate(118%)!important;box-shadow:0 8px 24px rgba(0,0,0,.15),inset 0 1px 0 rgba(255,255,255,.16)!important}
-nav#nav .navItem.active{background:rgba(109,91,199,.66)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.17)!important}
+nav#nav .navItem.active{background:rgba(97,81,186,.96)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.17)!important}
+/* Web browser fallback: no bleed-through when Android native bar is unavailable. */
+nav#nav{background:var(--glass-fill)!important;box-shadow:0 10px 30px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.11)!important}
+nav#nav .navItem{color:var(--text)!important;text-shadow:none!important}
+nav#nav .navItem.active{color:#fff!important}
+body:not(.native-glass) main{padding-bottom:calc(155px + env(safe-area-inset-bottom))!important}
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>

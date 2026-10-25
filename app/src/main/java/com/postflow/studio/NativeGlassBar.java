@@ -62,9 +62,9 @@ public final class NativeGlassBar extends FrameLayout {
             final boolean active=i==index;
             tabs[i].setTextColor(active?Color.WHITE:0xffb9bfd3);
             GradientDrawable pill=new GradientDrawable();
-            pill.setColor(active?0x886c5de2:Color.TRANSPARENT);
+            pill.setColor(active?0xcc655ac9:Color.TRANSPARENT);
             pill.setCornerRadius(dp(19));
-            if(active)pill.setStroke(dp(1),0x66ffffff);
+            if(active)pill.setStroke(dp(1),0x40ffffff);
             tabs[i].setBackground(pill);
             tabs[i].animate().scaleX(active?1.03f:1f).scaleY(active?1.03f:1f).setDuration(220).start();
         }
@@ -86,7 +86,7 @@ public final class NativeGlassBar extends FrameLayout {
                        "half3 halo=half3(.30,.45,.80)*exp(-10.*length(uv-half2(.22,.0)));"+
                        "half dispersion=half(sin(uv.x*18.+uv.y*7.)*.02);"+
                        "half3 light=half3(.35+dispersion,.43,.64-dispersion)*half(rim);"+
-                       "return half4(base+halo+light+half(wave),.91);}");
+                       "return half4(base+halo*.55+light*.48+half(wave*.3),.985);}");
                 }catch(Exception ignored){glass=null;}
             }
         }
@@ -97,7 +97,7 @@ public final class NativeGlassBar extends FrameLayout {
                 glass.setFloatUniform("size",(float)Math.max(1,getWidth()),(float)Math.max(1,getHeight()));
                 paint.setShader(glass);
             }else{
-                paint.setShader(new LinearGradient(0,0,getWidth(),getHeight(),new int[]{0xeb252a45,0xee141a30},null,Shader.TileMode.CLAMP));
+                paint.setShader(new LinearGradient(0,0,getWidth(),getHeight(),new int[]{0xfa252a45,0xfd141a30},null,Shader.TileMode.CLAMP));
             }
             canvas.drawRoundRect(0,0,getWidth(),getHeight(),r,r,paint);
             paint.setShader(null);

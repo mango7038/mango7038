@@ -77,7 +77,14 @@ jobs:
           }
           assert(html.includes("window.addEventListener('scroll'"),'Scroll-responsive chrome missing');
           assert(html.includes('nav#nav'), 'Floating navigation rules missing');
-          console.log('JavaScript syntax, core features and Liquid Glass UI regression hooks verified');
+          const nativeBar=fs.readFileSync('app/src/main/java/com/postflow/studio/NativeGlassBar.java','utf8');
+          const activity=fs.readFileSync('app/src/main/java/com/postflow/studio/MainActivity.java','utf8');
+          assert(nativeBar.includes('paint.setColor(0xff171d34)'),'Opaque navigation foundation missing');
+          assert(nativeBar.includes('canvas.drawRoundRect(0,0,getWidth(),getHeight(),r,r,paint)'),'Navigation background fill missing');
+          assert(activity.includes('glassScrim')&&activity.includes('setVisibility(visibility)'),'Native bottom scrim/visibility regression');
+          assert(html.includes('body.native-glass nav#nav{display:none!important}'),'Duplicate WebView navigation not hidden');
+          assert(html.includes('padding-bottom:calc(190px'),'Native navigation scroll clearance missing');
+          console.log('JavaScript syntax, core features and readable native glass navigation checks passed');
           NODE
       - name: Build permanently signed release APK
         run: gradle --no-daemon --stacktrace :app:assembleRelease
@@ -99,11 +106,11 @@ jobs:
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/postflow-badging.txt"
           head -n 15 "$RUNNER_TEMP/postflow-badging.txt"
           grep -q "name='com.postflow.studio.permanent'" "$RUNNER_TEMP/postflow-badging.txt"
-          grep -q "versionCode='11'" "$RUNNER_TEMP/postflow-badging.txt"
+          grep -q "versionCode='12'" "$RUNNER_TEMP/postflow-badging.txt"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-7.9.0-native-agls-glass
+          name: PostFlow-Studio-7.9.1-readable-glass-nav
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

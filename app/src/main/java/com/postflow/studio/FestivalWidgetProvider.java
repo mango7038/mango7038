@@ -87,13 +87,24 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         try{return new JSONObject(c.getSharedPreferences("postflow",0).getString("state","{}"));}
         catch(Exception ignored){return new JSONObject();}
     }
+    /** Keep the home-screen widget in the currently selected Instagram workspace. */
+    private static boolean inActiveWorkspace(JSONObject post,String selected){
+        if(selected==null||selected.isEmpty())return true;
+        JSONArray workspaces=post.optJSONArray("workspaces");
+        if(workspaces!=null)for(int i=0;i<workspaces.length();i++)if(selected.equals(workspaces.optString(i)))return true;
+        JSONArray destinations=post.optJSONArray("wpSelected");
+        String prefix=selected.replace(':','_')+":";
+        if(destinations!=null)for(int i=0;i<destinations.length();i++)if(destinations.optString(i).startsWith(prefix))return true;
+        return false; // Untagged legacy posts must not leak into another account's widget.
+    }
     private static List<Item> onDate(Context c,LocalDate day){
         JSONObject root=state(c);
         List<Item> out=new ArrayList<>();
+        String workspace=root.optString("activeWorkspace","");
         JSONArray posts=root.optJSONArray("posts");
         if(posts!=null)for(int i=0;i<posts.length()&&i<1000;i++){
             JSONObject p=posts.optJSONObject(i);
-            if(p==null||!day.toString().equals(p.optString("date")))continue;
+            if(p==null||!day.toString().equals(p.optString("date"))||!inActiveWorkspace(p,workspace))continue;
             String status=p.optString("status","draft");
             if("scheduled".equals(status)||"published".equals(status)||"draft".equals(status)||"processing".equals(status)||"uploading".equals(status)||"awaiting_verification".equals(status)||"attention".equals(status))
                 out.add(new Item(p.optString("title","Post"),"POST",status,p.optString("mediaId",""),p.optString("caption",""),p.optString("date","")));

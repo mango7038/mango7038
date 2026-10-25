@@ -31,6 +31,8 @@ public final class MainActivity extends Activity {
     private static final int FILE_PICKER = 2002;
     private static final int BACKUP_PICKER = 2003;
     private WebView web;
+    private NativeGlassBar glassBar;
+    private android.widget.FrameLayout glassRoot;
     WebView getWebViewForBridge(){return web;}
     private ValueCallback<Uri[]> fileCallback;
 
@@ -99,7 +101,40 @@ public final class MainActivity extends Activity {
             fileCallback=null;
         }
     }
-    private void unlockAndLoad(){web.loadUrl("file:///android_asset/index.html");}
+    private void unlockAndLoad(){
+        installGlassChrome();
+        web.loadUrl("file:///android_asset/index.html");
+    }
+    private void installGlassChrome(){
+        if(glassRoot!=null)return;
+        glassRoot=new android.widget.FrameLayout(this);
+        if(web.getParent() instanceof android.view.ViewGroup)((android.view.ViewGroup)web.getParent()).removeView(web);
+        glassRoot.addView(web,new android.widget.FrameLayout.LayoutParams(-1,-1));
+        glassBar=new NativeGlassBar(this,index->{
+            String code;
+            switch(index){
+                case 0:code="route('home')";break;
+                case 1:code="route('calendar')";break;
+                case 2:code="compose()";break;
+                case 3:code="route('library')";break;
+                default:code="openMenu()";break;
+            }
+            web.evaluateJavascript(code,null);
+        });
+        float den=getResources().getDisplayMetrics().density;
+        android.widget.FrameLayout.LayoutParams lp=new android.widget.FrameLayout.LayoutParams(
+            -1,Math.round(66*den),android.view.Gravity.BOTTOM);
+        lp.leftMargin=Math.round(12*den);lp.rightMargin=Math.round(12*den);
+        lp.bottomMargin=Math.round(12*den);
+        glassRoot.addView(glassBar,lp);
+        setContentView(glassRoot);
+    }
+    void setGlassNavigationVisible(boolean visible){
+        runOnUiThread(()->{if(glassBar!=null)glassBar.setVisibility(visible?android.view.View.VISIBLE:android.view.View.GONE);});
+    }
+    void setGlassSelectedTab(int index){
+        runOnUiThread(()->{if(glassBar!=null)glassBar.select(index);});
+    }
     private void showPinGate(){
         if(!PinGate.hasPin(this)){
             requestPin(true, null);

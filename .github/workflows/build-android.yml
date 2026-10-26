@@ -91,6 +91,8 @@ jobs:
           NODE
       - name: Four-phase integration guardrails
         run: node tests/fourphase-guardrails.test.js
+      - name: Validate Instagram Story no-crop pipeline
+        run: node tests/story-no-crop.test.js
       - name: Build permanently signed release APK
         run: gradle --no-daemon --stacktrace :app:assembleRelease
       - name: Validate APK signature

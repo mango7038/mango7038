@@ -86,9 +86,11 @@ public final class StoryCanvasRenderer {
             }
             int[] swap=pixels;pixels=out;out=swap;
         }
-        tiny.setPixels(pixels,0,w,0,0,w,h);
+        Bitmap softened=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);
+        softened.setPixels(pixels,0,w,0,0,w,h);
         paint.setFilterBitmap(true);
-        canvas.drawBitmap(tiny,null,new android.graphics.Rect(0,0,WIDTH,HEIGHT),paint);
+        canvas.drawBitmap(softened,null,new android.graphics.Rect(0,0,WIDTH,HEIGHT),paint);
+        softened.recycle();
         tiny.recycle();
         paint.setColor(0x750d1020);
         canvas.drawRect(0,0,WIDTH,HEIGHT,paint);

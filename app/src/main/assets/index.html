@@ -268,11 +268,11 @@ body:not(.native-glass) main{padding-bottom:calc(155px + env(safe-area-inset-bot
 .pf-story-stage{position:relative;width:100%;aspect-ratio:9/16;overflow:hidden;border-radius:24px;border:1px solid rgba(255,255,255,.17);background:#20263c;isolation:isolate}
 .pf-story-stage img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .pf-story-backdrop{object-fit:cover;filter:blur(28px) brightness(.53);transform:scale(1.18)}
-.pf-story-foreground{z-index:1;object-fit:contain;box-sizing:border-box;padding:10.42% 4.07% 13%}
+.pf-story-foreground{z-index:1;object-fit:contain;left:4.07%!important;top:11.46%!important;width:91.86%!important;height:77.08%!important}
 .pf-story-stage.pf-style-solid{background:#293145}
 .pf-story-stage.pf-style-gradient{background:linear-gradient(145deg,#242e48,#54466b 58%,#141b31)}
 .pf-story-stage.pf-style-solid .pf-story-backdrop,.pf-story-stage.pf-style-gradient .pf-story-backdrop{display:none}
-.pf-story-stage.pf-style-crop .pf-story-foreground{padding:0;object-fit:cover}
+.pf-story-stage.pf-style-crop .pf-story-foreground{inset:0!important;width:100%!important;height:100%!important;object-fit:cover}
 .pf-story-progress{position:absolute;z-index:2;top:10px;left:9px;right:9px;height:3px;background:rgba(255,255,255,.85);border-radius:5px}
 .pf-story-username{position:absolute;z-index:2;top:20px;left:12px;color:white!important;text-shadow:0 1px 4px rgba(0,0,0,.8);font-size:12px;font-weight:700}
 .pf-story-reply{position:absolute;z-index:2;bottom:19px;left:15px;width:63%;height:36px;padding:10px 12px;border:1px solid #ffffff9c;border-radius:30px;color:white!important;background:#11182744;font-size:12px}
@@ -883,9 +883,10 @@ function mediaPreflightMessage(m){
   const r=m.width/m.height;
   if(m.width<320||m.height<320)details.push('⚠ Resolution too low for reliable Instagram publishing');
   else if(Math.abs(r-9/16)<.04||Math.abs(r-1)<.04||Math.abs(r-4/5)<.04)details.push('✓ Standard social aspect');
-  else details.push('⚠ Nonstandard aspect — review crop');
+  else details.push('Nonstandard aspect — Story will fit without cropping by default');
  }
  if(Number.isFinite(m.duration)&&m.duration>0)details.push(Math.round(m.duration)+' sec');
+ if(m.type.startsWith('image/')&&m.width&&m.height&&Math.abs(m.width/m.height-9/16)>.04)details.push('✓ Instagram Story: 9:16 no-crop conversion available');
  return details.join(' · ');
 }
 function previewSelectedPostMedia(){

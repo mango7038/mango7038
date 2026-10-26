@@ -81,8 +81,13 @@ public final class NativeBridge {
 
     /** Upload a local asset and one destination as an independent scheduled job. */
     @JavascriptInterface public void queueWordPressPost(String mediaId,String clientId,String platform,String externalId,String placement,String caption,long scheduledAt){
+        queueWordPressPostStyled(mediaId,clientId,platform,externalId,placement,caption,scheduledAt,StoryCanvasRenderer.DEFAULT_STYLE);
+    }
+
+    @JavascriptInterface public void queueWordPressPostStyled(String mediaId,String clientId,String platform,String externalId,String placement,String caption,long scheduledAt,String storyStyle){
         new Thread(()->{
             java.net.HttpURLConnection c=null;
+            File temporaryStory=null;
             try{
                 if(!MediaContentProvider.valid(mediaId)||!clientId.matches("[A-Za-z0-9_-]{12,100}")
                     ||!java.util.Arrays.asList("facebook","instagram","google").contains(platform)
@@ -94,6 +99,13 @@ public final class NativeBridge {
                 String ext=storedName.toLowerCase(java.util.Locale.ROOT);
                 String mime=ext.endsWith(".png")?"image/png":ext.endsWith(".mp4")?"video/mp4":ext.endsWith(".mov")?"video/quicktime":"image/jpeg";
                 if(platform.equals("google")&&!mime.startsWith("image/"))throw new IOException("Google Business Profile update needs an image.");
+                File uploadMedia=media;
+                if(platform.equals("instagram")&&placement.equals("story")&&mime.startsWith("image/")){
+                    temporaryStory=StoryCanvasRenderer.render(media,activity.getCacheDir(),storyStyle);
+                    uploadMedia=temporaryStory;
+                    mime="image/jpeg";
+                    if(uploadMedia.length()>15L*1024*1024)throw new IOException("Prepared Story image exceeds 15 MB");
+                }
                 String boundary="PFC"+java.util.UUID.randomUUID().toString().replace("-","");
                 java.net.URL url=new java.net.URL("https://graphicanest.in/wp-json/postflow/v1/jobs");
                 c=(java.net.HttpURLConnection)url.openConnection();
@@ -106,7 +118,7 @@ public final class NativeBridge {
                     writeField(out,boundary,"placement",placement);writeField(out,boundary,"caption",caption==null?"":caption);
                     writeField(out,boundary,"scheduled_at",Long.toString(scheduledAt));writeField(out,boundary,"client_job_id",clientId);
                     out.write(("--"+boundary+"\r\nContent-Disposition: form-data; name=\"media\"; filename=\"upload."+mime.substring(mime.indexOf('/')+1).replace("jpeg","jpg").replace("quicktime","mov")+"\"\r\nContent-Type: "+mime+"\r\n\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
-                    try(java.io.InputStream in=new java.io.FileInputStream(media)){
+                    try(java.io.InputStream in=new java.io.FileInputStream(uploadMedia)){
                         byte[] buffer=new byte[65536];int n;while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
                     }
                     out.write(("\r\n--"+boundary+"--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -123,7 +135,7 @@ public final class NativeBridge {
                 sendPublishResult(result.toString());
             }catch(Exception ex){
                 try{org.json.JSONObject result=new org.json.JSONObject();result.put("client_id",clientId);result.put("ok",false);result.put("error","Upload failed. Check connection and media; retry carefully.");sendPublishResult(result.toString());}catch(Exception ignored){}
-            }finally{if(c!=null)c.disconnect();}
+            }finally{if(c!=null)c.disconnect();if(temporaryStory!=null)temporaryStory.delete();}
         }).start();
     }
     private static void writeField(java.io.OutputStream out,String boundary,String name,String value)throws IOException{

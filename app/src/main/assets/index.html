@@ -262,6 +262,20 @@ body:not(.native-glass) main{padding-bottom:calc(155px + env(safe-area-inset-bot
 /* Separate local calendar reminders from confirmed server jobs. */
 .pf-local-warning{margin:10px 0 0;padding:10px 12px;border-radius:12px;border:1px solid rgba(234,147,158,.38);background:rgba(125,43,69,.12);color:var(--text);font-size:12px;line-height:1.5}
 .pf-local-warning button{display:inline-block;margin:5px 0 0;padding:7px 10px;border:1px solid var(--glass-line);border-radius:10px;background:var(--surface);color:var(--text);font-size:12px;font-weight:650}
+/* Story preview mirrors the native 1080x1920 container and Instagram UI safe areas. */
+.pf-story-preview{max-width:360px;margin:16px auto}
+.pf-story-preview[hidden]{display:none!important}
+.pf-story-stage{position:relative;width:100%;aspect-ratio:9/16;overflow:hidden;border-radius:24px;border:1px solid rgba(255,255,255,.17);background:#20263c;isolation:isolate}
+.pf-story-stage img{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.pf-story-backdrop{object-fit:cover;filter:blur(28px) brightness(.53);transform:scale(1.18)}
+.pf-story-foreground{z-index:1;object-fit:contain;box-sizing:border-box;padding:10.42% 4.07% 13%}
+.pf-story-stage.pf-style-solid{background:#293145}
+.pf-story-stage.pf-style-gradient{background:linear-gradient(145deg,#242e48,#54466b 58%,#141b31)}
+.pf-story-stage.pf-style-solid .pf-story-backdrop,.pf-story-stage.pf-style-gradient .pf-story-backdrop{display:none}
+.pf-story-stage.pf-style-crop .pf-story-foreground{padding:0;object-fit:cover}
+.pf-story-progress{position:absolute;z-index:2;top:10px;left:9px;right:9px;height:3px;background:rgba(255,255,255,.85);border-radius:5px}
+.pf-story-username{position:absolute;z-index:2;top:20px;left:12px;color:white!important;text-shadow:0 1px 4px rgba(0,0,0,.8);font-size:12px;font-weight:700}
+.pf-story-reply{position:absolute;z-index:2;bottom:19px;left:15px;width:63%;height:36px;padding:10px 12px;border:1px solid #ffffff9c;border-radius:30px;color:white!important;background:#11182744;font-size:12px}
 </style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
@@ -697,7 +711,23 @@ function editPost(id){
   <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div id="mediaQualityInfo" class="note">Select a poster to inspect file size, dimensions and aspect ratio.</div><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
   <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onchange="previewSelectedPostMedia()"></div><div class="field"><label>Select 1–10 photos (1 = single post; 2–10 = carousel)</label><input id="pCarousel" type="file" accept="image/jpeg,image/png" multiple onchange="previewCarouselMedia()"><small id="carouselSelected">Existing carousel: ${(d.mediaIds||[]).length} images. JPG/PNG only.</small></div>
   ${p&&p.mediaId?`<div class="note">Attached media is saved locally (${esc(p.mediaName||'Original file')}). Changing media is optional.</div>`:''}
-  <div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><small>Carousel exports JPEG files at 1080×1350 (4:5) or 1080×1080 (1:1) when saved. Original images are never overwritten. Other media exports are unchanged.</small></div></div><div class="composer-stage" data-stage="3" hidden><div class="layout-actions"><div class="field"><label>Date</label><input id="pDate" type="date" value="${esc(d.date)}"></div><div class="field"><label>Time (IST)</label><input id="pTime" type="time" value="${esc(d.time)}"></div></div>
+  <div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><div class="field"><label>Instagram Story fit (9:16)</label><select id="pStoryStyle" onchange="updateStoryPreview()">
+    <option value="fit_blur" ${(d.storyStyle||'fit_blur')==='fit_blur'?'selected':''}>Fit Original + Blurred Background (default)</option>
+    <option value="fit_solid" ${d.storyStyle==='fit_solid'?'selected':''}>Fit Original + Solid Background</option>
+    <option value="fit_gradient" ${d.storyStyle==='fit_gradient'?'selected':''}>Fit Original + Gradient</option>
+    <option value="fill_crop" ${d.storyStyle==='fill_crop'?'selected':''}>Fill & Crop (explicitly allow crop)</option>
+   </select></div>
+   <button type="button" class="btn secondary" onclick="openStoryPreview()" style="width:100%">Preview Story 9:16 · Safe Zones</button>
+   <div class="pf-story-preview" id="pfStoryPreview" hidden>
+     <div class="pf-story-stage" id="pfStoryStage">
+       <img id="pfStoryBackdrop" class="pf-story-backdrop" alt="" aria-hidden="true">
+       <img id="pfStoryForeground" class="pf-story-foreground" alt="Story content preview">
+       <div class="pf-story-progress"></div><div class="pf-story-username">◎ Your Instagram Story · Preview</div>
+       <div class="pf-story-reply">Send message</div>
+     </div>
+     <p id="pfStoryQuality" class="note">The full original poster is kept inside the visible safe area unless Fill & Crop is explicitly selected.</p>
+   </div>
+   <small>Carousel exports JPEG files at 1080×1350 (4:5) or 1080×1080 (1:1). Stories export separately to 1080×1920. Feed originals remain untouched. For video Stories, use a native 9:16 video source.</small></div></div><div class="composer-stage" data-stage="3" hidden><div class="layout-actions"><div class="field"><label>Date</label><input id="pDate" type="date" value="${esc(d.date)}"></div><div class="field"><label>Time (IST)</label><input id="pTime" type="time" value="${esc(d.time)}"></div></div>
   <div class="field"><label>Content Type</label><select id="pKind"><option value="image" ${d.kind==='image'?'selected':''}>Photo / Poster</option><option value="reel" ${d.kind==='reel'?'selected':''}>Reel / Video</option><option value="carousel" ${d.kind==='carousel'?'selected':''}>Carousel (2–10 images)</option></select></div>
   </div><div class="composer-stage" data-stage="4" hidden><div class="section"><h3>Publishing Destinations</h3></div><p class="sub">Each post can go to Feed, Story, or only WhatsApp manual sharing.</p>
   ${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="tar_${key}" ${(d.targets||[]).includes(key)?'checked':''}><label for="tar_${key}">${label}</label></div>`).join('')}
@@ -773,6 +803,32 @@ function hasActiveServerJobs(id){return Object.values(state.wpPendingJobs||{}).s
 function serverEditWarning(id){const jobs=Object.values(state.wpPendingJobs||{}).filter(j=>j.postId===id&&j.serverId);return jobs.length?'<div class="detail-error"><strong>WordPress publishing job exists</strong><p>You can view this post, but edits here cannot change its live server schedule. Editing is blocked until server-side edit/cancel support is available.</p>'+btn('See Publishing Jobs','closeModal();refreshPublishJobs()','secondary')+'</div>':''}
 function cancelLocalSchedule(id){const p=state.posts.find(x=>x.id===id);if(!p)return;if(hasActiveServerJobs(id))return toast('Server schedule cannot be cancelled here yet.');if(!confirm('Cancel local reminder and keep post as draft?'))return;p.status='draft';save();closeModal();route('queue');toast('Local reminder cancelled. Post saved as draft.')}
 function updateRatioPreview(){const img=document.getElementById('postLargePreview');if(!img)return;const ratio=document.getElementById('pRatio')?.value||'original',fit=document.getElementById('pFit')?.value||'contain';img.style.aspectRatio=ratio==='original'?'auto':ratio.replace(':','/');img.style.height=ratio==='original'?'auto':'min(70vw,420px)';img.style.objectFit=fit==='cover'?'cover':'contain';img.style.background='var(--soft)';}
+
+function storyStyleValue(){const v=document.getElementById('pStoryStyle')?.value||'fit_blur';return ['fit_blur','fit_solid','fit_gradient','fill_crop'].includes(v)?v:'fit_blur'}
+function updateStoryPreview(){
+ const stage=document.getElementById('pfStoryStage'),main=document.getElementById('postLargePreview');
+ if(!stage||!main)return;
+ const source=main.getAttribute('src')||'';
+ if(!source||main.style.display==='none')return;
+ const mode=storyStyleValue(),bg=document.getElementById('pfStoryBackdrop'),fg=document.getElementById('pfStoryForeground');
+ stage.className='pf-story-stage '+(mode==='fit_solid'?'pf-style-solid':mode==='fit_gradient'?'pf-style-gradient':mode==='fill_crop'?'pf-style-crop':'');
+ bg.src=source;fg.src=source;
+ const width=selectedMediaSnapshot?.width||main.naturalWidth||0,height=selectedMediaSnapshot?.height||main.naturalHeight||0;
+ const quality=document.getElementById('pfStoryQuality');
+ if(quality)quality.textContent=(width&&height?width+' × '+height+' original · ':'')+
+ (mode==='fill_crop'?'⚠ Fill & Crop may cut logos, headings and text at the edges.':
+ '✓ No Crop: full poster preserved; 1080 × 1920 Story prepared only for the Instagram Story destination.')+
+ (width&&height&&(width<720||height<720)?' ⚠ Original is low resolution and may look soft.':'')+
+ ' Instagram header and reply controls are simulated for preview.';
+}
+function openStoryPreview(){
+ const parent=document.getElementById('pfStoryPreview');
+ if(!parent)return;
+ if(!parent.hidden){parent.hidden=true;return}
+ const main=document.getElementById('postLargePreview');
+ if(!main?.getAttribute('src')||main.style.display==='none'){toast('Choose a photo first to preview Story framing.');return}
+ parent.hidden=false;updateStoryPreview();parent.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 function suggestCaption(){const title=document.getElementById('pTitle').value.trim()||'Social Media Post';document.getElementById('pCaption').value=makeCaption(title,pickCategory(title),Math.floor(Date.now()/1000)%3);toast('GraphicaNest caption draft generated — review before publishing')}
 let pendingCarouselFiles=[],carouselPreviewUrls=[];
 let editedPosterFile=null,posterHistory=[],posterDraftFields=null,posterLogoImage=null,posterLayers=[],posterSelected=-1,posterDrag=null,posterPendingLayers=null;
@@ -854,7 +910,7 @@ function previewSelectedPostMedia(){
   if(label)label.textContent=mediaPreflightMessage(captured);
   if(file.type.startsWith('image/')){
    const img=new Image();
-   img.onload=()=>{if(version!==selectedMediaVersion)return;captured.width=img.naturalWidth;captured.height=img.naturalHeight;if(label)label.textContent=mediaPreflightMessage(captured);};
+   img.onload=()=>{if(version!==selectedMediaVersion)return;captured.width=img.naturalWidth;captured.height=img.naturalHeight;if(label)label.textContent=mediaPreflightMessage(captured);updateStoryPreview();};
    img.onerror=()=>{if(version===selectedMediaVersion&&label)label.textContent=mediaPreflightMessage(captured)+' · Could not inspect image dimensions';};
    img.src=selectedMediaPreviewUrl;
    if(preview){preview.src=selectedMediaPreviewUrl;preview.style.display='block';}
@@ -953,7 +1009,7 @@ async function storePost(scheduleNow=false){
   if(!scheduleNow&&status==='scheduled'&&!targets.length){toast('Select destinations or save as Draft');return}
   let old=state.posts.find(x=>x.id===editing)||{},id=editing||uid();
   let accountTargets={};state.accounts.forEach(a=>{let destinations=placementsForAccount(a).map(x=>x[0]).filter(k=>document.getElementById('account_'+a.id+'_'+k)?.checked);if(destinations.length)accountTargets[a.id]=destinations});
-  let post={...old,id,title,date,time,status:scheduleNow?'uploading': 'draft',targets,accountTargets,wpSelected:selectedIds,workspaces:[...new Set(selectedWP.map(({a})=>accountKey(a)).concat(activeWorkspace()?[state.activeWorkspace]:[]))],captionApproved:true,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
+  let post={...old,id,title,date,time,status:scheduleNow?'uploading': 'draft',targets,accountTargets,wpSelected:selectedIds,workspaces:[...new Set(selectedWP.map(({a})=>accountKey(a)).concat(activeWorkspace()?[state.activeWorkspace]:[]))],captionApproved:true,ratio:document.getElementById('pRatio')?.value||'original',fitMode:document.getElementById('pFit')?.value||'contain',storyStyle:document.getElementById('pStoryStyle')?.value||'fit_blur',caption:document.getElementById('pCaption').value,kind:document.getElementById('pKind').value};if(editedPosterFile&&posterPendingLayers){post.posterLayers=posterPendingLayers;post.sourceMediaId=old.sourceMediaId||old.mediaId||null;}
   const carouselFiles=[...pendingCarouselFiles];
   if(carouselFiles.length){
     if(carouselFiles.length>10||carouselFiles.some(f=>!['image/jpeg','image/png'].includes(f.type))){toast('Select up to 10 JPG/PNG images');return}
@@ -1509,7 +1565,10 @@ function submitDirectWordPress(p,selected){
     PostFlowNative.queueWordPressCarousel(JSON.stringify(p.mediaIds),key,a.platform,a.external_id,p.caption||'',at);
    }else{
     if(!p.mediaId)throw Error('Image or video is missing.');
-    PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
+    if(a.platform==='instagram'&&placement==='story'){
+      if(!window.PostFlowNative?.queueWordPressPostStyled)throw Error('Update PostFlow to v8.1.0 for safe Story processing.');
+      PostFlowNative.queueWordPressPostStyled(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at,p.storyStyle||'fit_blur');
+    }else PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
    }
   }catch(e){state.wpPendingJobs[key].status='upload_failed';state.wpPendingJobs[key].error=e.message||'Upload could not start';}
  }
@@ -1539,7 +1598,10 @@ function submitPublishPost(id){
  selected.forEach(({a,placement})=>{
   const key='pf_'+uid().replace(/[^a-zA-Z0-9_-]/g,'');
   state.wpPendingJobs[key]={title:p.title,postId:p.id,account:a.name,external_id:String(a.external_id),platform:a.platform,placement,status:'uploading',scheduled_at:at};
-  if(placement==='carousel')PostFlowNative.queueWordPressCarousel(JSON.stringify(p.mediaIds),key,a.platform,a.external_id,p.caption||'',at);else PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
+  if(placement==='carousel')PostFlowNative.queueWordPressCarousel(JSON.stringify(p.mediaIds),key,a.platform,a.external_id,p.caption||'',at);else if(a.platform==='instagram'&&placement==='story'){
+      if(!window.PostFlowNative?.queueWordPressPostStyled)throw Error('Update PostFlow to v8.1.0 for safe Story processing.');
+      PostFlowNative.queueWordPressPostStyled(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at,p.storyStyle||'fit_blur');
+    }else PostFlowNative.queueWordPressPost(p.mediaId,key,a.platform,a.external_id,placement,p.caption||'',at);
  });
  p.date=date;p.time=time;p.workspaces=[...new Set([...(p.workspaces||[]),...selected.map(x=>accountKey(x.a))])];save();closeModal();route('accounts');toast('Uploading jobs; check Publishing Jobs for results');
 }

@@ -60,6 +60,11 @@ public final class MainActivity extends Activity {
                 if(url!=null && url.startsWith("file:///android_asset/")){
                     // Make the native bar the sole navigation; prevent the HTML bar showing beneath it.
                     view.evaluateJavascript("document.body.classList.add('native-glass');document.querySelector('#nav')?.setAttribute('aria-hidden','true');",null);
+                    String widgetAction=getIntent()!=null?getIntent().getStringExtra("postflow_widget_action"):null;
+                    if("compose".equals(widgetAction)||"openZip".equals(widgetAction)){
+                        getIntent().removeExtra("postflow_widget_action");
+                        view.evaluateJavascript("setTimeout(function(){"+widgetAction+"()},120)",null);
+                    }
                 }
             }
             @Override public boolean shouldOverrideUrlLoading(WebView v, WebResourceRequest request){
@@ -91,6 +96,16 @@ public final class MainActivity extends Activity {
         });
         EventScheduler.reschedule(this);
         showPinGate();
+    }
+
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        setIntent(intent);
+        String widgetAction=intent!=null?intent.getStringExtra("postflow_widget_action"):null;
+        if(web!=null && ("compose".equals(widgetAction)||"openZip".equals(widgetAction))){
+            intent.removeExtra("postflow_widget_action");
+            web.evaluateJavascript(widgetAction+"()",null);
+        }
     }
 
     @Override protected void onActivityResult(int requestCode,int resultCode,Intent data){

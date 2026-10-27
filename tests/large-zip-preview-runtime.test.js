@@ -10,12 +10,12 @@ const handler=html.slice(start,end);
 assert(!handler.includes('function(raw){'),'ZIP callback parameter collides with local TXT raw');
 const actualParser=html.slice(html.indexOf('function parseFestivalPostTxt(raw){'),html.indexOf('function matchFestivalPostTxt('));
 const parse=Function(actualParser+'\nreturn parseFestivalPostTxt')();
-let errors=[],deleted=[],displayed=0;
+let errors=[],notifications=[],deleted=[],displayed=0;
 const context={
  console:{error:e=>errors.push(e)},
  window:{PostFlowNative:{deleteMedia:id=>deleted.push(id)}},
  document:{getElementById:id=>id==='zipMode'?{value:'draft'}:id==='zipInput'?{files:[]}:null},
- toast:msg=>errors.push(msg),
+ toast:msg=>notifications.push(msg),
  DEST:[['ig_story','Instagram Story']],
  state:{settings:{time:'09:00'},wpAccounts:[]},
  activeWorkspace:()=>null,
@@ -42,7 +42,8 @@ const fixture={
 };
 context.window.onPostFlowLargeZipResult(JSON.stringify(fixture));
 assert.equal(displayed,1,'ZIP review did not appear');
-assert.equal(errors.length,0,'Unexpected ZIP processing error: '+errors.join(' / '));
+assert.equal(errors.length,0,'Unexpected ZIP processing exception: '+errors.join(' / '));
+assert(notifications.some(m=>m.includes('Large ZIP ready: 1 media items')),'Expected review success notification');
 assert.equal(deleted.length,0,'Poster deleted before user confirmed');
 let review=vm.runInContext('zipReviewSession',context);
 assert.equal(review.rows.length,1);
@@ -57,5 +58,5 @@ vm.runInContext('nativeZipSession=null; zipReviewSession=null;',context);
 context.parseFestivalPostTxt=()=>{throw Error('simulated malformed TXT')};
 context.window.onPostFlowLargeZipResult(JSON.stringify(fixture));
 assert(deleted.includes('z-test-media'),'Staged media leaked on parse failure');
-assert(errors.some(e=>String(e).includes('simulated malformed TXT')),'Error not reported');
+assert(notifications.some(e=>String(e).includes('simulated malformed TXT')),'Error not reported');
 console.log('Native >200MB ZIP callback: TXT parsing, Story preview, schedule metadata, ReferenceError guard and failure cleanup PASSED');

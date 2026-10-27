@@ -29,6 +29,9 @@ public final class WidgetPreviewActivity extends Activity {
         final String mediaId=getIntent().getStringExtra("media_id");
         final String caption=getIntent().getStringExtra("caption");
         final String title=getIntent().getStringExtra("title");
+        final String account=getIntent().getStringExtra("account");
+        final String when=getIntent().getStringExtra("scheduled_time");
+        final String mediaUrl=getIntent().getStringExtra("media_url");
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(15),dp(12),dp(15),dp(18));root.setBackgroundColor(0xff101322);
         LinearLayout header=new LinearLayout(this);header.setGravity(Gravity.CENTER_VERTICAL);
@@ -39,6 +42,12 @@ public final class WidgetPreviewActivity extends Activity {
         heading.setEllipsize(android.text.TextUtils.TruncateAt.END);
         header.addView(heading,new LinearLayout.LayoutParams(0,dp(52),1));
         root.addView(header);
+        if(account!=null&&!account.isEmpty()){
+            TextView subtitle=new TextView(this);
+            subtitle.setText(account+"  ·  "+(when==null?"":when)+" IST");
+            subtitle.setTextColor(0xffcfc2f0);subtitle.setTextSize(13);subtitle.setPadding(dp(8),0,0,dp(10));
+            root.addView(subtitle);
+        }
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
         LinearLayout content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);
         ImageView poster=new ImageView(this);poster.setAdjustViewBounds(true);poster.setScaleType(ImageView.ScaleType.FIT_CENTER);
@@ -56,10 +65,13 @@ public final class WidgetPreviewActivity extends Activity {
                 }
             }
         }
+        if(bitmap==null&&mediaUrl!=null&&!mediaUrl.isEmpty())bitmap=WidgetImageCache.get(this,mediaUrl);
         if(bitmap!=null){poster.setImageBitmap(bitmap);content.addView(poster,new LinearLayout.LayoutParams(-1,-2));}
         else {
             TextView message=new TextView(this);
-            message.setText("Poster image unavailable on this device. Open PostFlow and restore or reattach the media.");
+            message.setText(mediaUrl!=null&&!mediaUrl.isEmpty()?
+                "WordPress poster thumbnail is loading. Open preview again after synchronization.":
+                "Poster image unavailable on this device. Reconnect WordPress or reattach media.");
             message.setTextColor(0xffd1cae7);message.setTextSize(15);message.setGravity(Gravity.CENTER);
             content.addView(message,new LinearLayout.LayoutParams(-1,dp(260)));
         }

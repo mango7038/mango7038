@@ -93,6 +93,8 @@ jobs:
         run: node tests/fourphase-guardrails.test.js
       - name: Validate Instagram Story no-crop pipeline
         run: node tests/story-no-crop.test.js
+      - name: Verify large ZIP and home widget regressions
+        run: node tests/widget-large-zip-regression.test.js
       - name: Build permanently signed release APK
         run: gradle --no-daemon --stacktrace :app:assembleRelease
       - name: Validate APK signature
@@ -113,11 +115,11 @@ jobs:
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/postflow-badging.txt"
           head -n 15 "$RUNNER_TEMP/postflow-badging.txt"
           grep -q "name='com.postflow.studio.permanent'" "$RUNNER_TEMP/postflow-badging.txt"
-          grep -q "versionCode='15'" "$RUNNER_TEMP/postflow-badging.txt"
+          grep -q "versionCode='16'" "$RUNNER_TEMP/postflow-badging.txt"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-8.1.0-smart-story-no-crop
+          name: PostFlow-Studio-8.2.0-compact-widget-large-zip
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

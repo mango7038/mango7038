@@ -19,6 +19,9 @@ import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.LocalDate;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.Set;
 import java.time.format.DateTimeFormatter;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -34,9 +37,9 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     private static final DateTimeFormatter LABEL=DateTimeFormatter.ofPattern("dd MMM yyyy",Locale.ENGLISH);
 
     private static final class Item {
-        final String title,kind,status,mediaId,caption,date;
-        Item(String title,String kind,String status,String mediaId,String caption,String date){
-            this.title=title;this.kind=kind;this.status=status;this.mediaId=mediaId;this.caption=caption;this.date=date;
+        final String title,kind,status,mediaId,caption,date,account,time,remoteUrl;
+        Item(String title,String kind,String status,String mediaId,String caption,String date,String account,String time,String remoteUrl){
+            this.title=title;this.kind=kind;this.status=status;this.mediaId=mediaId;this.caption=caption;this.date=date;this.account=account;this.time=time;this.remoteUrl=remoteUrl;
         }
     }
 
@@ -87,36 +90,130 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         try{return new JSONObject(c.getSharedPreferences("postflow",0).getString("state","{}"));}
         catch(Exception ignored){return new JSONObject();}
     }
-    /** Keep the home-screen widget in the currently selected Instagram workspace. */
-    private static boolean inActiveWorkspace(JSONObject post,String selected){
-        if(selected==null||selected.isEmpty())return true;
-        JSONArray workspaces=post.optJSONArray("workspaces");
-        if(workspaces!=null)for(int i=0;i<workspaces.length();i++)if(selected.equals(workspaces.optString(i)))return true;
-        JSONArray destinations=post.optJSONArray("wpSelected");
-        String prefix=selected.replace(':','_')+":";
-        if(destinations!=null)for(int i=0;i<destinations.length();i++)if(destinations.optString(i).startsWith(prefix))return true;
-        return false; // Untagged legacy posts must not leak into another account's widget.
+    /** Only live publishing jobs generate Story/Feed markers or previews. All accounts are visible. */
+    private static boolean isActive(String status){
+        return "scheduled".equals(status)||"uploading".equals(status)||"processing".equals(status)||"awaiting_verification".equals(status);
+    }
+    private static String postAccount(JSONObject root,JSONObject post){
+        JSONArray picked=post.optJSONArray("wpSelected");
+        if(picked!=null&&picked.length()>0){
+            String first=picked.optString(0,"");
+            int sep=first.lastIndexOf(':');
+            if(sep>0){
+                String id=first.substring(0,sep);
+                JSONArray accounts=root.optJSONArray("wpAccounts");
+                if(accounts!=null)for(int i=0;i<accounts.length();i++){
+                    JSONObject a=accounts.optJSONObject(i);
+                    if(a!=null&&(a.optString("platform")+"_"+a.optString("external_id")).equals(id))
+                        return "@"+a.optString("username",a.optString("name","Instagram"));
+                }
+            }
+        }
+        JSONArray spaces=post.optJSONArray("workspaces");
+        JSONArray accounts=root.optJSONArray("wpAccounts");
+        if(spaces!=null&&accounts!=null)for(int i=0;i<spaces.length();i++){
+            String key=spaces.optString(i);
+            for(int j=0;j<accounts.length();j++){
+                JSONObject a=accounts.optJSONObject(j);
+                if(a!=null&&(a.optString("platform")+":"+a.optString("external_id")).equals(key))
+                    return "@"+a.optString("username",a.optString("name","Instagram"));
+            }
+        }
+        return "Connected account";
+    }
+    private static JSONObject findPost(JSONObject root,String id){
+        JSONArray posts=root.optJSONArray("posts");if(posts==null)return null;
+        for(int i=0;i<posts.length();i++){JSONObject p=posts.optJSONObject(i);if(p!=null&&id.equals(p.optString("id")))return p;}
+        return null;
+    }
+    private static String istDay(long unix){
+        try{return Instant.ofEpochSecond(unix).atZone(EventScheduler.ZONE).toLocalDate().toString();}
+        catch(Exception ignored){return "";}
+    }
+    private static String istTime(long unix){
+        try{return Instant.ofEpochSecond(unix).atZone(EventScheduler.ZONE).format(DateTimeFormatter.ofPattern("hh:mm a",Locale.ENGLISH));}
+        catch(Exception ignored){return "";}
     }
     private static List<Item> onDate(Context c,LocalDate day){
         JSONObject root=state(c);
         List<Item> out=new ArrayList<>();
-        String workspace=root.optString("activeWorkspace","");
+        Set<String> handledPosts=new HashSet<>();
+        Set<String> handledJobs=new HashSet<>();
+        JSONObject pending=root.optJSONObject("wpPendingJobs");
+        JSONArray server=root.optJSONArray("wpServerJobs");
+        if(server!=null)for(int i=0;i<server.length()&&i<2000;i++){
+            JSONObject job=server.optJSONObject(i);
+            if(job==null||!isActive(job.optString("status")))continue;
+            long unix=job.optLong("scheduled_at",0);
+            if(!day.toString().equals(istDay(unix)))continue;
+            String jobId=String.valueOf(job.optInt("id",0));
+            if(!handledJobs.add(jobId))continue;
+            JSONObject local=null;
+            if(pending!=null){
+                java.util.Iterator<String> keys=pending.keys();
+                while(keys.hasNext()){
+                    JSONObject tracked=pending.optJSONObject(keys.next());
+                    if(tracked!=null&&jobId.equals(String.valueOf(tracked.optInt("serverId",-1)))){
+                        local=findPost(root,tracked.optString("postId"));break;
+                    }
+                }
+            }
+            String account=job.optString("account_name",job.optString("platform","Instagram"));
+            String display=account.startsWith("@")?account:"@"+account;
+            String title=local!=null?local.optString("title","Post"):job.optString("title","Scheduled "+job.optString("placement","post"));
+            String mediaId=local!=null?local.optString("mediaId",""):"";
+            String url=job.optString("media_preview_url","");
+            out.add(new Item(title,job.optString("placement","feed").equals("story")?"STORY":"POST",
+                    job.optString("status"),mediaId,job.optString("caption",""),day.toString(),display,
+                    istTime(unix),url));
+            if(local!=null)handledPosts.add(local.optString("id"));
+        }
+        if(pending!=null){
+            java.util.Iterator<String> keys=pending.keys();
+            while(keys.hasNext()){
+                JSONObject tracked=pending.optJSONObject(keys.next());
+                if(tracked==null||!isActive(tracked.optString("status")))continue;
+                String postId=tracked.optString("postId","");
+                JSONObject p=findPost(root,postId);
+                if(p==null||handledPosts.contains(postId))continue;
+                long scheduled=tracked.optLong("scheduled_at",0);
+                String date=scheduled>0?istDay(scheduled):p.optString("date");
+                if(!day.toString().equals(date))continue;
+                String placement=tracked.optString("placement","feed");
+                String account=tracked.optString("account",postAccount(root,p));
+                String display=account.startsWith("@")?account:"@"+account;
+                out.add(new Item(p.optString("title","Post"),"story".equals(placement)?"STORY":"POST",
+                        tracked.optString("status"),p.optString("mediaId",""),
+                        p.optString("caption",""),date,display,
+                        scheduled>0?istTime(scheduled):p.optString("time",""),""));
+                handledPosts.add(postId);
+            }
+        }
         JSONArray posts=root.optJSONArray("posts");
-        if(posts!=null)for(int i=0;i<posts.length()&&i<1000;i++){
+        if(posts!=null)for(int i=0;i<posts.length()&&i<1500;i++){
             JSONObject p=posts.optJSONObject(i);
-            if(p==null||!day.toString().equals(p.optString("date"))||!inActiveWorkspace(p,workspace))continue;
-            String status=p.optString("status","draft");
-            if("scheduled".equals(status)||"published".equals(status)||"draft".equals(status)||"processing".equals(status)||"uploading".equals(status)||"awaiting_verification".equals(status)||"attention".equals(status))
-                out.add(new Item(p.optString("title","Post"),"POST",status,p.optString("mediaId",""),p.optString("caption",""),p.optString("date","")));
+            if(p==null||handledPosts.contains(p.optString("id"))
+                ||!day.toString().equals(p.optString("date"))||!isActive(p.optString("status")))continue;
+            // If the associated server job was cancelled/published, never keep a stale local marker.
+            boolean hasTracked=false;
+            if(pending!=null){java.util.Iterator<String> keys=pending.keys();while(keys.hasNext()){
+                JSONObject tracked=pending.optJSONObject(keys.next());
+                if(tracked!=null&&p.optString("id").equals(tracked.optString("postId"))){hasTracked=true;break;}
+            }}
+            if(hasTracked)continue;
+            String type=(p.optString("placement","")+" "+p.optString("kind","")+" "+p.optJSONArray("targets")).toLowerCase(Locale.ROOT);
+            out.add(new Item(p.optString("title","Post"),type.contains("story")?"STORY":"POST",
+                p.optString("status"),p.optString("mediaId",""),p.optString("caption",""),
+                day.toString(),postAccount(root,p),p.optString("time",""),""));
         }
         JSONArray events=root.optJSONArray("events");
         if(events!=null)for(int i=0;i<events.length()&&i<500;i++){
-            JSONObject e=events.optJSONObject(i);if(e==null)continue;
+            JSONObject e=events.optJSONObject(i);if(e==null||e.optBoolean("cancelled",false))continue;
             try{
                 LocalDate ed=LocalDate.parse(e.optString("date"));
                 boolean same=ed.equals(day)||(e.optBoolean("repeat",false)&&ed.getMonth()==day.getMonth()&&ed.getDayOfMonth()==day.getDayOfMonth());
                 if(same&&!out.stream().anyMatch(p->p.title.equalsIgnoreCase(e.optString("title"))))
-                    out.add(new Item(e.optString("title","Festival"),"FESTIVAL","Poster reminder","","",day.toString()));
+                    out.add(new Item(e.optString("title","Festival"),"FESTIVAL","Reminder","","",day.toString(),"Festival","", ""));
             }catch(Exception ignored){}
         }
         return out;
@@ -126,6 +223,13 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id).putExtra("delta",delta).putExtra("index",index);
         intent.setData(Uri.parse("postflow-widget://"+id+"/"+request));
         return PendingIntent.getBroadcast(c,id*100+request,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+    }
+    private static PendingIntent appAction(Context c,int widgetId,String route,int code){
+        Intent launch=new Intent(c,MainActivity.class);
+        launch.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TOP|Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        launch.putExtra("postflow_widget_action",route);
+        launch.setData(Uri.parse("postflow-widget-action://"+widgetId+"/"+route));
+        return PendingIntent.getActivity(c,widgetId*100+code,launch,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
     }
     private static void updateOne(Context c,AppWidgetManager manager,int id){
         LocalDate today=LocalDate.now(EventScheduler.ZONE),day;
@@ -137,10 +241,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         RemoteViews rv=new RemoteViews(c.getPackageName(),R.layout.widget_festival);
         rv.setTextViewText(R.id.widgetTitle,day.getMonth().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH)+" "+day.getYear());
         rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL));
-        rv.setTextViewText(R.id.widgetPostPosition,posts.size()>1?(index+1)+" / "+posts.size():"");
+        rv.setTextViewText(R.id.widgetPostPosition,posts.isEmpty()?"0/0":(index+1)+"/"+posts.size());
         rv.setViewVisibility(R.id.widgetPrevPost,posts.size()>1?android.view.View.VISIBLE:android.view.View.INVISIBLE);
         rv.setViewVisibility(R.id.widgetNextPost,posts.size()>1?android.view.View.VISIBLE:android.view.View.INVISIBLE);
-        int shown=visibleDays(manager,id);
+        int shown=7;
         rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day,shown));
         rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-shown,0));
         rv.setOnClickPendingIntent(R.id.widgetNextWeek,broadcast(c,id,21,ACTION_DATE,shown,0));
@@ -150,10 +254,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             if(i<shown)rv.setOnClickPendingIntent(dateCells[i],broadcast(c,id,30+i,ACTION_DATE,i-shown/2,0));
         }
         rv.setTextViewText(R.id.widgetNext,current==null?"No scheduled posts":current.title);
-        rv.setTextViewText(R.id.widgetSecond,current==null?"Select another date":current.kind+" · "+current.status.replace('_',' '));
-        rv.setTextViewText(R.id.widgetThird,current==null?"":day.format(LABEL));
-        rv.setOnClickPendingIntent(R.id.widgetPrevDay,broadcast(c,id,1,ACTION_DATE,-1,0));
-        rv.setOnClickPendingIntent(R.id.widgetNextDay,broadcast(c,id,2,ACTION_DATE,1,0));
+        rv.setTextViewText(R.id.widgetSecond,current==null?"CALENDAR":current.kind+" · "+current.status.replace('_',' ').toUpperCase(Locale.ENGLISH));
+        rv.setTextViewText(R.id.widgetThird,current==null?"GN + SM · No active posts":current.account+" · "+current.time);
+        rv.setOnClickPendingIntent(R.id.widgetCreate,appAction(c,id,"compose",40));
+        rv.setOnClickPendingIntent(R.id.widgetUpload,appAction(c,id,"openZip",41));
         rv.setOnClickPendingIntent(R.id.widgetToday,broadcast(c,id,3,ACTION_TODAY,0,0));
         rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_ITEM,0,posts.isEmpty()?0:(index+posts.size()-1)%posts.size()));
         rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_ITEM,0,posts.isEmpty()?0:(index+1)%posts.size()));
@@ -195,67 +299,47 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         opts.inJustDecodeBounds=false;
         try{return BitmapFactory.decodeFile(file.getAbsolutePath(),opts);}catch(Exception e){return null;}
     }
-    /** Status markers for the visible week: Story green, feed Post blue, Festival red. */
-    private static int[] markers(JSONObject root,LocalDate day){
+    /** The markers and previews use identical, account-independent active-job filtering. */
+    private static int[] markers(Context c,LocalDate day){
         boolean story=false,post=false,festival=false;
-        JSONArray posts=root.optJSONArray("posts");
-        if(posts!=null)for(int i=0;i<posts.length()&&i<2000;i++){
-            JSONObject p=posts.optJSONObject(i);
-            if(p==null||!day.toString().equals(p.optString("date")))continue;
-            String status=p.optString("status","");
-            if(!("scheduled".equals(status)||"published".equals(status)||"processing".equals(status)||"uploading".equals(status)||"awaiting_verification".equals(status)))continue;
-            String type=(p.optString("kind","")+" "+p.optString("type","")+" "+p.optString("placement","")).toLowerCase(Locale.ROOT);
-            JSONArray targets=p.optJSONArray("targets");
-            if(targets!=null)for(int j=0;j<targets.length();j++)type+=" "+targets.optString(j).toLowerCase(Locale.ROOT);
-            JSONObject accountTargets=p.optJSONObject("accountTargets");
-            if(accountTargets!=null)type+=" "+accountTargets.toString().toLowerCase(Locale.ROOT);
-            if(type.contains("story"))story=true;
-            if(type.contains("feed")||type.contains("post")||(!type.contains("story")&&!type.contains("reel")))post=true;
-        }
-        JSONArray events=root.optJSONArray("events");
-        if(events!=null)for(int i=0;i<events.length()&&i<500;i++){
-            JSONObject e=events.optJSONObject(i);if(e==null)continue;
-            try{
-                LocalDate eventDate=LocalDate.parse(e.optString("date",""));
-                if(eventDate.equals(day)||(e.optBoolean("repeat",false)&&eventDate.getMonthValue()==day.getMonthValue()&&eventDate.getDayOfMonth()==day.getDayOfMonth())){
-                    if("festival".equalsIgnoreCase(e.optString("type","festival")))festival=true;
-                }
-            }catch(Exception ignored){}
+        for(Item item:onDate(c,day)){
+            if("STORY".equals(item.kind))story=true;
+            else if("POST".equals(item.kind))post=true;
+            else if("FESTIVAL".equals(item.kind))festival=true;
         }
         return new int[]{story?0xff28c987:0,post?0xff3996ff:0,festival?0xffff5267:0};
     }
     /** High resolution, proportional date cards; FIT_CENTER keeps every card's aspect ratio. */
     private static Bitmap weekBitmap(Context c,LocalDate selected,int shown){
-        final int slot=66, h=104, scale=3;
+        final int slot=52, h=95, scale=3;
         Bitmap b=Bitmap.createBitmap(slot*shown*scale,h*scale,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(b);
         canvas.scale(scale,scale);
         Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
         LocalDate start=selected.minusDays(shown/2);
-        JSONObject data=state(c);
         for(int i=0;i<shown;i++){
             LocalDate date=start.plusDays(i);
             float cx=slot*(i+.5f);
             paint.setColor(date.equals(selected)?0xff7753dc:0x773d3656);
-            canvas.drawRoundRect(new RectF(cx-28,2,cx+28,101),18,18,paint);
+            canvas.drawRoundRect(new RectF(cx-24,2,cx+24,92),18,18,paint);
             paint.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
             paint.setTextSize(14);
             paint.setColor(0xffd7cfea);
             String weekday=date.getDayOfWeek().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH);
-            canvas.drawText(weekday,cx-paint.measureText(weekday)/2,30,paint);
+            canvas.drawText(weekday,cx-paint.measureText(weekday)/2,28,paint);
             paint.setColor(Color.WHITE);
             paint.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
-            paint.setTextSize(27);
+            paint.setTextSize(24);
             String dayNumber=String.valueOf(date.getDayOfMonth());
-            canvas.drawText(dayNumber,cx-paint.measureText(dayNumber)/2,71,paint);
-            int[] dots=markers(data,date);
+            canvas.drawText(dayNumber,cx-paint.measureText(dayNumber)/2,66,paint);
+            int[] dots=markers(c,date);
             int count=0;
             for(int color:dots)if(color!=0)count++;
             int n=0;
             for(int color:dots){
                 if(color==0)continue;
                 paint.setColor(color);
-                canvas.drawCircle(cx+(n-(count-1)/2f)*11,89,3.6f,paint);
+                canvas.drawCircle(cx+(n-(count-1)/2f)*10,83,3.5f,paint);
                 n++;
             }
         }

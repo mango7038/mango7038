@@ -251,8 +251,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         rv.setTextViewText(R.id.widgetTitle,day.getMonth().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH)+" "+day.getYear());
         rv.setTextViewText(R.id.widgetSelectedDay,day.format(LABEL));
         rv.setTextViewText(R.id.widgetPostPosition,posts.isEmpty()?"0/0":(index+1)+"/"+posts.size());
-        rv.setViewVisibility(R.id.widgetPrevPost,posts.size()>1?android.view.View.VISIBLE:android.view.View.INVISIBLE);
-        rv.setViewVisibility(R.id.widgetNextPost,posts.size()>1?android.view.View.VISIBLE:android.view.View.INVISIBLE);
+        // As in GraphicaNest's reference, arrows stay visible even without a post:
+        // navigate posts when multiple exist, otherwise navigate adjacent dates.
+        rv.setViewVisibility(R.id.widgetPrevPost,android.view.View.VISIBLE);
+        rv.setViewVisibility(R.id.widgetNextPost,android.view.View.VISIBLE);
         int shown=7;
         rv.setImageViewBitmap(R.id.widgetCalendar,weekBitmap(c,day,shown));
         rv.setOnClickPendingIntent(R.id.widgetPrevWeek,broadcast(c,id,20,ACTION_DATE,-shown,0));
@@ -264,12 +266,17 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }
         rv.setTextViewText(R.id.widgetNext,current==null?"No scheduled posts":current.title);
         rv.setTextViewText(R.id.widgetSecond,current==null?"CALENDAR":current.kind+" · "+current.status.replace('_',' ').toUpperCase(Locale.ENGLISH));
-        rv.setTextViewText(R.id.widgetThird,current==null?"GN + SM · No active posts":current.account+" · "+current.time);
+        rv.setTextViewText(R.id.widgetThird,current==null?"Create or upload a poster for this date":current.account+" · "+current.time);
         rv.setOnClickPendingIntent(R.id.widgetCreate,appAction(c,id,"compose",40));
         rv.setOnClickPendingIntent(R.id.widgetUpload,appAction(c,id,"openZip",41));
         rv.setOnClickPendingIntent(R.id.widgetToday,broadcast(c,id,3,ACTION_TODAY,0,0));
-        rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_ITEM,0,posts.isEmpty()?0:(index+posts.size()-1)%posts.size()));
-        rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_ITEM,0,posts.isEmpty()?0:(index+1)%posts.size()));
+        if(posts.size()>1){
+            rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_ITEM,0,(index+posts.size()-1)%posts.size()));
+            rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_ITEM,0,(index+1)%posts.size()));
+        }else{
+            rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_DATE,-1,0));
+            rv.setOnClickPendingIntent(R.id.widgetNextPost,broadcast(c,id,5,ACTION_DATE,1,0));
+        }
         Intent open=new Intent(c,WidgetPreviewActivity.class);
         if(current!=null){
             open.putExtra("media_id",current.mediaId);
@@ -287,7 +294,11 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         if(preview!=null){
             rv.setImageViewBitmap(R.id.widgetPoster,preview);
             rv.setViewVisibility(R.id.widgetPoster,android.view.View.VISIBLE);
-        }else rv.setViewVisibility(R.id.widgetPoster,android.view.View.GONE);
+            rv.setViewVisibility(R.id.widgetBrandMark,android.view.View.GONE);
+        }else{
+            rv.setViewVisibility(R.id.widgetPoster,android.view.View.GONE);
+            rv.setViewVisibility(R.id.widgetBrandMark,android.view.View.VISIBLE);
+        }
         boolean shareable=current!=null&&MediaContentProvider.valid(current.mediaId)&&MediaContentProvider.mediaFile(c,current.mediaId).isFile();
         rv.setViewVisibility(R.id.widgetShare,shareable?android.view.View.VISIBLE:android.view.View.GONE);
         rv.setViewVisibility(R.id.widgetOpen,current!=null&&!current.mediaId.isEmpty()||current!=null&&!current.remoteUrl.isEmpty()?android.view.View.VISIBLE:android.view.View.GONE);
@@ -323,10 +334,10 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }
         return new int[]{story?0xff28c987:0,post?0xff3996ff:0,festival?0xffff5267:0};
     }
-    /** High resolution, proportional date cards; FIT_CENTER keeps every card's aspect ratio. */
+    /** The original GraphicaNest widget uses short pills and dots below each pill. */
     private static Bitmap weekBitmap(Context c,LocalDate selected,int shown){
-        final int slot=52, h=95, scale=2;
-        Bitmap b=Bitmap.createBitmap(slot*shown*scale,h*scale,Bitmap.Config.ARGB_8888);
+        final int slot=52, height=73, scale=2;
+        Bitmap b=Bitmap.createBitmap(slot*shown*scale,height*scale,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(b);
         canvas.scale(scale,scale);
         Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
@@ -335,27 +346,28 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         for(int i=0;i<shown;i++){
             LocalDate date=start.plusDays(i);
             float cx=slot*(i+.5f);
-            paint.setColor(date.equals(selected)?0xff7753dc:0x773d3656);
-            canvas.drawRoundRect(new RectF(cx-24,2,cx+24,92),18,18,paint);
+            paint.setColor(date.equals(selected)?0xff7952e6:0x92413a54);
+            canvas.drawRoundRect(new RectF(cx-23,2,cx+23,53),15,15,paint);
             paint.setTypeface(android.graphics.Typeface.create("sans-serif-medium",android.graphics.Typeface.NORMAL));
-            paint.setTextSize(14);
-            paint.setColor(0xffd7cfea);
-            String weekday=date.getDayOfWeek().getDisplayName(TextStyle.SHORT,Locale.ENGLISH).toUpperCase(Locale.ENGLISH);
-            canvas.drawText(weekday,cx-paint.measureText(weekday)/2,28,paint);
+            paint.setTextSize(11);
+            paint.setColor(0xffe5dfea);
+            String weekday=date.getDayOfWeek().getDisplayName(TextStyle.SHORT,Locale.ENGLISH)
+                .toUpperCase(Locale.ENGLISH);
+            canvas.drawText(weekday,cx-paint.measureText(weekday)/2,19,paint);
             paint.setColor(Color.WHITE);
             paint.setTypeface(android.graphics.Typeface.create("sans-serif",android.graphics.Typeface.BOLD));
-            paint.setTextSize(24);
-            String dayNumber=String.valueOf(date.getDayOfMonth());
-            canvas.drawText(dayNumber,cx-paint.measureText(dayNumber)/2,66,paint);
+            paint.setTextSize(21);
+            String number=String.valueOf(date.getDayOfMonth());
+            canvas.drawText(number,cx-paint.measureText(number)/2,43,paint);
             int[] dots=markers(root,date);
             int count=0;
             for(int color:dots)if(color!=0)count++;
-            int n=0;
+            int offset=0;
             for(int color:dots){
                 if(color==0)continue;
                 paint.setColor(color);
-                canvas.drawCircle(cx+(n-(count-1)/2f)*10,83,3.5f,paint);
-                n++;
+                canvas.drawCircle(cx+(offset-(count-1)/2f)*9,65,3.1f,paint);
+                offset++;
             }
         }
         return b;

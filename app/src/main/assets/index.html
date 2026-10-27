@@ -1419,7 +1419,7 @@ window.onPostFlowLargeZipResult=function(raw){
    if(!['post','story'].includes(type))problems.push('Unsupported post type');
    const platforms=String(rec?.platform||'instagram').toLowerCase().split(/[,|;]/).map(x=>x.trim()).filter(Boolean);
    if(platforms.some(x=>!['instagram','facebook'].includes(x)))problems.push('Unsupported platform');
-   return {path:e.path,title,date,time,type,platforms,caption:rec?.caption??plain.caption??m.caption??makeCaption(title,pickCategory(title)),greeting:rec?.greeting||'',problems};
+   return {path:e.path,title,date,time,type,platforms,caption:rec?.caption??plain.caption??m.caption??makeCaption(title,pickCategory(title)),greeting:rec?.greeting||'',canAutoSchedule:!!rec,problems};
   });
   nativeZipSession={entries,metadata,manifest,name:'Large ZIP'};
   zipReviewSession={file:null,mode,targets,rows,nativeEntries:entries};
@@ -1521,7 +1521,7 @@ async function importNativeZipAfterReview(){
    const valid=rec&&rec.problems.length===0&&validFestivalDateTime(date,time);
    const transformed=festivalPostTargets(valid?{...rec,platform:rec.platforms.join(',')}:null,targets);
    const future=valid&&Date.parse(date+'T'+time+':00+05:30')>=Date.now()+120000;
-   const ready=future&&!transformed.warning;
+   const ready=future&&!transformed.warning&&rec.canAutoSchedule;
    const selected=ready?transformed.targets:[...targets];
    const title=rec?.title||titleFromName(entry.path);
    const post={id:uid(),title,caption:rec?.caption||zipCaption(title,pickCategory(title),entry.path),

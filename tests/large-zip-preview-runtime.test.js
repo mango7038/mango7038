@@ -52,7 +52,6 @@ assert.equal(review.rows[0].date,'2026-11-08');
 assert.equal(review.rows[0].caption,'Approved Story caption');
 assert.equal(review.rows[0].canAutoSchedule,true);
 assert.equal(review.rows[0].problems.length,0);
-context.discardNativeZip=undefined;
 // Simulate parse exception before native session ownership: all staged media must be cleaned.
 vm.runInContext('nativeZipSession=null; zipReviewSession=null;',context);
 context.parseFestivalPostTxt=()=>{throw Error('simulated malformed TXT')};

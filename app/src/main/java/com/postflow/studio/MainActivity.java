@@ -103,7 +103,7 @@ public final class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         String widgetAction=intent!=null?intent.getStringExtra("postflow_widget_action"):null;
-        if(web!=null && ("compose".equals(widgetAction)||"openZip".equals(widgetAction))){
+        if(web!=null && web.getUrl()!=null && web.getUrl().startsWith("file:///android_asset/") && ("compose".equals(widgetAction)||"openZip".equals(widgetAction))){
             intent.removeExtra("postflow_widget_action");
             web.evaluateJavascript(widgetAction+"()",null);
         }

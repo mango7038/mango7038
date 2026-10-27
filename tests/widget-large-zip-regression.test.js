@@ -14,6 +14,15 @@ for(const item of ['widgetCreate','widgetUpload','widgetPoster','widgetCalendar'
  assert(xml.includes('@+id/'+item),'Widget control missing: '+item);
 }
 assert(xml.includes('widget_background'),'Glass widget background missing');
+assert(xml.includes('android:layout_height="64dp"'),'Seven-day strip must remain compact');
+assert(xml.includes('android:layout_width="88dp" android:layout_height="84dp"'),'Bottom thumbnail region must not exceed launcher height');
+assert(xml.includes('android:layout_height="39dp"'),'Create/Upload controls must fit at minimum launcher height');
+assert(xml.includes('widgetBrandMark'),'Empty preview should retain subtle PostFlow watermark');
+assert(xml.includes('widget_counter_bg'),'Reference-style translucent post count badge missing');
+assert(provider.includes('height=73, scale=2'),'Calendar poster dots and pills must use compact proportions');
+assert(provider.includes('canvas.drawCircle(cx+(offset-(count-1)/2f)*9,65'),'Dots must remain below date cards');
+assert(provider.includes('else{\\n            rv.setOnClickPendingIntent(R.id.widgetPrevPost')||provider.includes('rv.setOnClickPendingIntent(R.id.widgetPrevPost,broadcast(c,id,4,ACTION_DATE,-1,0))'),'Empty-day arrows must navigate dates');
+
 assert(provider.includes('int shown=7;'),'Widget must show seven days');
 assert(provider.includes('private static boolean isActive'),'Missing active-status filter');
 assert(provider.includes('return onDate(state(c),day);'),'Widget preview not using unified job dataset');

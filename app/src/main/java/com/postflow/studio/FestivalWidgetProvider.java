@@ -325,7 +325,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     }
     /** High resolution, proportional date cards; FIT_CENTER keeps every card's aspect ratio. */
     private static Bitmap weekBitmap(Context c,LocalDate selected,int shown){
-        final int slot=52, h=95, scale=3;
+        final int slot=52, h=95, scale=2;
         Bitmap b=Bitmap.createBitmap(slot*shown*scale,h*scale,Bitmap.Config.ARGB_8888);
         Canvas canvas=new Canvas(b);
         canvas.scale(scale,scale);

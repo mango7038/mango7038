@@ -1268,7 +1268,7 @@ function regenerateZipCaptions(){
  allowed.forEach(p=>{p.caption=zipCaption(p.title,p.category||pickCategory(p.mediaName||p.title),p.mediaName||p.title);p.captionApproved=false;});
  save();route('library');toast('Regenerated captions for '+allowed.length+' ZIP posts. Review before publishing.');
 }
-function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one TXT (any filename) with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. A review screen is shown before any post is scheduled. Auto mode submits only confirmed eligible posts to WordPress. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
+function openZip(){showModal({title:'Import Dated ZIP',body:`<p class="sub">Dates in each media filename take priority, for example <b>2026-11-08_Diwali.jpg</b>. If absent, a dated folder name or manifest date is used. Future posts automatically schedule at ${esc(state.settings.time)} IST.</p><div class="field fileinput"><label>Choose ZIP file from your Android phone</label><input id="zipInput" type="file" accept=".zip,application/zip"><small>ZIP files over 200 MB use memory-safe Android streaming automatically. Maximum 250 media files, 100 MB per poster.</small><button type="button" class="btn secondary" onclick="openNativeLargeZip()" style="width:100%;margin-top:10px">Select Large ZIP via Android Picker</button></div><div class="field"><label>Import mode</label><select id="zipMode"><option value="auto">Send valid TXT posts to WordPress when connected</option><option value="draft">Import as drafts (review before scheduling)</option></select></div><div class="section"><h3>Where should these posts appear?</h3></div><p class="sub">Choose Feed, Story, Reels, Google Business Profile or WhatsApp reminder independently. You can change each post after import.</p>${DEST.map(([key,label])=>`<div class="check"><input type="checkbox" id="zip_${key}" ${state.settings.defaultTargets.includes(key)?'checked':''}><label for="zip_${key}">${label}</label></div>`).join('')}<div class="note">Festival ZIP: add one TXT (any filename) with [POST], filename, title, type, platform, date, time, greeting and caption. Supported: Instagram/Facebook post or story. Originals and greetings are preserved. A review screen is shown before any post is scheduled. Auto mode submits only confirmed eligible posts to WordPress. Offline captions are fallback only. Manifest captions take priority. Review captions before posting. Past/uncertain dates and private birthdays go to Draft. Duplicates are skipped. Optional captions.txt: [filename.jpg] followed by the multiline caption. TXT captions take priority over manifest.csv. Optional manifest.csv columns: file,date,time,title,category,caption,destinations.</div><div class="field">${btn('Import and Process ZIP','processZip()','full')}</div>`})}
 async function thumbnail(bytes,mime){return new Promise(resolve=>{if(!mime.startsWith('image/'))return resolve('');let blob=new Blob([bytes],{type:mime}),u=URL.createObjectURL(blob),im=new Image();im.onload=()=>{let c=document.createElement('canvas'),scale=Math.min(1,160/Math.max(im.width,im.height));c.width=Math.round(im.width*scale);c.height=Math.round(im.height*scale);let ctx=c.getContext('2d');ctx.drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(u);resolve(c.toDataURL('image/jpeg',.58))};im.onerror=()=>{URL.revokeObjectURL(u);resolve('')};im.src=u})}
 function safeFileName(name){return String(name||'media').split('/').pop().slice(0,160)}
 function base64Chunk(bytes){let result='';for(let i=0;i<bytes.length;i++)result+=String.fromCharCode(bytes[i]);return btoa(result)}
@@ -1368,6 +1368,66 @@ async function findZipMetadataTxt(zip){
  return usable.find(x=>x.structured)||usable[0]||null;
 }
 let zipReviewSession=null;
+
+let nativeZipSession=null;
+function openNativeLargeZip(){
+ if(!window.PostFlowNative?.importLargeZip)return toast('Update to PostFlow Studio 8.2.0 to import large ZIP files');
+ PostFlowNative.importLargeZip();
+}
+function discardNativeZip(){
+ if(!nativeZipSession)return;
+ for(const entry of nativeZipSession.entries||[])try{window.PostFlowNative?.deleteMedia?.(entry.mediaId)}catch(e){}
+ nativeZipSession=null;
+}
+window.onPostFlowLargeZipResult=function(raw){
+ try{
+  const result=JSON.parse(raw);
+  if(!result.ok)return toast('Large ZIP import failed: '+String(result.error||'Unknown error').slice(0,120));
+  discardNativeZip();
+  const entries=result.entries||[],metadata=result.metadata||[];
+  if(!entries.length)return toast('No supported media in ZIP');
+  const txt=metadata.filter(m=>String(m.path).toLowerCase().endsWith('.txt'));
+  const structuredFiles=txt.filter(m=>String(m.text).toUpperCase().includes('[POST]'));
+  if(structuredFiles.length>1){
+   for(const entry of entries)window.PostFlowNative?.deleteMedia?.(entry.mediaId);
+   return toast('Multiple [POST] files found. Keep only one structured TXT');
+  }
+  const chosen=structuredFiles[0]||txt.find(m=>String(m.path).toLowerCase().endsWith('captions.txt'))||null;
+  const raw=chosen?.text||'',structured=structuredFiles.length?parseFestivalPostTxt(raw):null;
+  const captions=chosen&&!structured?zipCaptionTextMap(raw):null;
+  const manifestFile=metadata.find(m=>String(m.path).toLowerCase().endsWith('manifest.csv'));
+  const manifest=manifestFile?csvRows(manifestFile.text):{};
+  const mode=document.getElementById('zipMode')?.value||'draft';
+  const targets=DEST.map(x=>x[0]).filter(k=>document.getElementById('zip_'+k)?.checked);
+  const counts=new Map();entries.forEach(e=>counts.set(safeFileName(e.path),(counts.get(safeFileName(e.path))||0)+1));
+  const rows=entries.map(e=>{
+   const m=manifest[e.path]||manifest[safeFileName(e.path)]||{};
+   const found=matchFestivalPostTxt(e.path,structured),plain=zipTextCaptionFor(e.path,captions),rec=found.record,problems=[];
+   if(structured&&found.warning)problems.push(found.warning);
+   if(structured&&counts.get(safeFileName(e.path))>1&&!structured.byFilename.has(e.path))problems.push('Ambiguous duplicate filename');
+   if(rec?.invalidTimezone)problems.push('Unsupported timezone');
+   if(rec?.invalidPlacement)problems.push('Unsupported placement');
+   const accountHint=String(rec?.account_id||rec?.account||'').trim();
+   if(accountHint){
+    const a=(state.wpAccounts||[]).find(x=>x.platform==='instagram'&&(String(x.external_id)===accountHint||String(x.username||x.name||'').replace(/^@/,'').toLowerCase()===accountHint.replace(/^@/,'').toLowerCase()));
+    if(!a||!activeWorkspace()||accountKey(a)!==state.activeWorkspace)problems.push('Account mismatch: select correct Instagram workspace');
+   }
+   const title=rec?.title||m.title||titleFromName(e.path);
+   const date=rec?.date||parseManifestDate(m.date)||guessDate(e.path)||'',time=rec?.time||m.time||state.settings.time;
+   if(!validFestivalDateTime(date,time))problems.push('Invalid date/time');
+   const type=String(rec?.type||'post').toLowerCase();
+   if(!['post','story'].includes(type))problems.push('Unsupported post type');
+   const platforms=String(rec?.platform||'instagram').toLowerCase().split(/[,|;]/).map(x=>x.trim()).filter(Boolean);
+   if(platforms.some(x=>!['instagram','facebook'].includes(x)))problems.push('Unsupported platform');
+   return {path:e.path,title,date,time,type,platforms,caption:rec?.caption??plain.caption??m.caption??makeCaption(title,pickCategory(title)),greeting:rec?.greeting||'',problems};
+  });
+  nativeZipSession={entries,metadata,manifest,name:'Large ZIP'};
+  zipReviewSession={file:null,mode,targets,rows,nativeEntries:entries};
+  showZipReview();
+  toast('Large ZIP ready: '+entries.length+' media items reviewed before scheduling');
+ }catch(e){console.error(e);toast('Large ZIP review error: '+String(e.message||e).slice(0,110));discardNativeZip()}
+};
+
 async function processZip(){
  const file=document.getElementById('zipInput')?.files?.[0];
  if(!file)return toast('Choose ZIP file');
@@ -1428,7 +1488,7 @@ function showZipReview(){
  btn(z.mode==='auto'?'Confirm & Schedule Valid Posts':'Confirm Draft Import','confirmZipReview()','full')+
  btn('Cancel','cancelZipReview()','secondary full')});
 }
-function cancelZipReview(){zipReviewSession=null;closeModal();toast('Import cancelled; nothing scheduled')}
+function cancelZipReview(){if(zipReviewSession?.nativeEntries)discardNativeZip();zipReviewSession=null;closeModal();toast('Import cancelled; nothing scheduled')}
 function confirmZipReview(){
  const z=zipReviewSession;if(!z)return;
  z.rows=z.rows.map((r,i)=>{
@@ -1438,7 +1498,57 @@ function confirmZipReview(){
   if(!validFestivalDateTime(date,time))problems.push('Invalid date/time');
   return {...r,title:get('title').trim(),date,time,type,platforms,caption:get('caption'),greeting:get('greeting'),problems};
  });
- z.confirmed=true;importZipAfterReview();
+ z.confirmed=true;if(z.nativeEntries)importNativeZipAfterReview();else importZipAfterReview();
+}
+
+
+async function importNativeZipAfterReview(){
+ const session=zipReviewSession,staging=nativeZipSession;
+ if(!session?.confirmed||!session.nativeEntries||!staging)return toast('Review session expired. Choose the ZIP again.');
+ const {mode,targets}=session,reviewed=new Map(session.rows.map(r=>[r.path,r]));
+ const existing=new Set(workspacePosts(state.posts).map(p=>p.fingerprint).filter(Boolean));
+ const multipleAccounts=instagramWorkspaces().length>1&&!activeWorkspace();
+ let added=0,duplicates=0,queued=0,drafts=0,warnings=[],submitted=[];
+ if(multipleAccounts&&mode==='auto')warnings.push('Select one Instagram workspace before automatic scheduling; posts saved as drafts');
+ if(mode==='auto'&&!hasWordPressPair())warnings.push('WordPress not connected; posts saved as drafts');
+ try{
+  for(const entry of staging.entries){
+   const rec=reviewed.get(entry.path),fingerprint=entry.size+':'+entry.crc;
+   if(existing.has(fingerprint)){duplicates++;window.PostFlowNative?.deleteMedia?.(entry.mediaId);continue}
+   existing.add(fingerprint);
+   const video=entry.path.toLowerCase().endsWith('.mp4')||entry.path.toLowerCase().endsWith('.mov');
+   const date=rec?.date||'',time=rec?.time||state.settings.time;
+   const valid=rec&&rec.problems.length===0&&validFestivalDateTime(date,time);
+   const transformed=festivalPostTargets(valid?{...rec,platform:rec.platforms.join(',')}:null,targets);
+   const future=valid&&Date.parse(date+'T'+time+':00+05:30')>=Date.now()+120000;
+   const ready=future&&!transformed.warning;
+   const selected=ready?transformed.targets:[...targets];
+   const title=rec?.title||titleFromName(entry.path);
+   const post={id:uid(),title,caption:rec?.caption||zipCaption(title,pickCategory(title),entry.path),
+    greeting:rec?.greeting||'',captionApproved:!!rec?.caption,captionSource:'Large ZIP TXT / manifest',
+    kind:video?'reel':'image',date:date||dateLocal(),time,targets:selected,
+    accountTargets:{},workspaces:activeWorkspace()?[state.activeWorkspace]:[],status:'draft',
+    thumb:entry.preview||'',fingerprint,origin:staging.name,category:pickCategory(title),
+    mediaId:entry.mediaId,mediaName:safeFileName(entry.path),placement:rec?.type||'post',storyStyle:'fit_blur'};
+   state.posts.push(post);added++;
+   if(mode==='auto'&&ready&&!multipleAccounts&&hasWordPressPair())submitted.push(post);else drafts++;
+   if(rec?.problems?.length)warnings.push(safeFileName(entry.path)+': '+rec.problems.join('; '));
+  }
+  state.imports.unshift({id:uid(),name:staging.name,imported:new Date().toLocaleDateString('en-IN'),added,duplicates,skipped:0,review:drafts,submitted:0});
+  state.lastZipCaptionWarnings=warnings.slice(0,15);
+  if(!save())throw Error('Cannot save imported posts. Free device storage and retry.');
+  for(const post of submitted){
+   const selected=wordpressTargetsForImported(post);
+   if(!selected.length||selected.length!==post.targets.filter(t=>['ig_feed','ig_story','fb_feed','fb_story'].includes(t)).length){
+    warnings.push('Connected destination missing: '+post.title);drafts++;continue;
+   }
+   submitDirectWordPress(post,selected);queued++;
+  }
+  state.imports[0].submitted=queued;
+  state.lastZipCaptionWarnings=warnings.slice(0,15);
+  save();nativeZipSession=null;zipReviewSession=null;closeModal();route('library');
+  toast('Imported '+added+' · queued '+queued+' · duplicates skipped '+duplicates);
+ }catch(err){console.error(err);toast('Large ZIP import error: '+String(err.message||err).slice(0,100))}
 }
 
 async function importZipAfterReview(){

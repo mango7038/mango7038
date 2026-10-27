@@ -1,96 +1,97 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widgetRoot" android:layout_width="match_parent"
-    android:layout_height="match_parent" android:orientation="vertical"
-    android:padding="14dp" android:background="@drawable/widget_background">
+    android:id="@+id/widgetRoot"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:orientation="vertical" android:padding="15dp"
+    android:background="@drawable/widget_background">
     <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
         android:orientation="horizontal" android:gravity="center_vertical">
         <TextView android:id="@+id/widgetTitle" android:layout_width="0dp" android:layout_weight="1"
-            android:layout_height="wrap_content" android:text="OCT 2026" android:textColor="#FFFFFF"
-            android:textSize="18sp" android:textStyle="bold" />
+            android:layout_height="wrap_content" android:text="OCT 2026" android:textColor="#F9F7FF"
+            android:textSize="20sp" android:textStyle="bold"/>
         <TextView android:id="@+id/widgetToday" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:padding="7dp" android:text="Today" android:textColor="#DBCFFF" android:textSize="12sp"
-            android:background="@drawable/widget_today_bg" />
+            android:paddingHorizontal="13dp" android:paddingVertical="8dp"
+            android:text="Today" android:textColor="#F0E9FF" android:textSize="12sp"
+            android:background="@drawable/widget_today_bg"/>
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:gravity="center_vertical" android:orientation="horizontal">
-        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="25dp" android:layout_height="76dp"
-            android:text="‹" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
-        <FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="76dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="92dp"
+        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="8dp">
+        <TextView android:id="@+id/widgetPrevWeek" android:layout_width="14dp" android:layout_height="match_parent"
+            android:gravity="center" android:text="‹" android:textColor="#C8B9FF" android:textSize="19sp"/>
+        <FrameLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="85dp">
             <ImageView android:id="@+id/widgetCalendar" android:layout_width="match_parent"
-                android:layout_height="match_parent" android:scaleType="fitCenter"
-                android:contentDescription="Adaptive calendar with colored schedule markers" />
+                android:layout_height="match_parent" android:scaleType="fitXY"
+                android:contentDescription="Seven days with Story, Feed and festival markers"/>
             <LinearLayout android:layout_width="match_parent" android:layout_height="match_parent"
                 android:orientation="horizontal">
-                <TextView android:id="@+id/widgetDate0" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
-                <TextView android:id="@+id/widgetDate1" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
-                <TextView android:id="@+id/widgetDate2" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
-                <TextView android:id="@+id/widgetDate3" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
-                <TextView android:id="@+id/widgetDate4" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
-                <TextView android:id="@+id/widgetDate5" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
-                <TextView android:id="@+id/widgetDate6" android:layout_width="0dp"
-                    android:layout_weight="1" android:layout_height="match_parent"
-                    android:contentDescription="Select calendar day" />
+                <TextView android:id="@+id/widgetDate0" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
+                <TextView android:id="@+id/widgetDate1" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
+                <TextView android:id="@+id/widgetDate2" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
+                <TextView android:id="@+id/widgetDate3" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
+                <TextView android:id="@+id/widgetDate4" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
+                <TextView android:id="@+id/widgetDate5" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
+                <TextView android:id="@+id/widgetDate6" android:layout_width="0dp" android:layout_weight="1" android:layout_height="match_parent" android:contentDescription="Select day"/>
             </LinearLayout>
         </FrameLayout>
-        <TextView android:id="@+id/widgetNextWeek" android:layout_width="25dp" android:layout_height="76dp"
-            android:text="›" android:gravity="center" android:textSize="24sp" android:textColor="#C8B9FF" />
+        <TextView android:id="@+id/widgetNextWeek" android:layout_width="14dp" android:layout_height="match_parent"
+            android:gravity="center" android:text="›" android:textColor="#C8B9FF" android:textSize="19sp"/>
     </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:id="@+id/widgetPrevDay" android:layout_width="45dp" android:layout_height="wrap_content"
-            android:text="‹" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />
-        <TextView android:id="@+id/widgetSelectedDay" android:layout_width="0dp" android:layout_weight="1"
-            android:layout_height="wrap_content" android:text="Today" android:gravity="center"
-            android:textColor="#AAA9C6" android:textSize="11sp" android:maxLines="1" />
-        <TextView android:id="@+id/widgetNextDay" android:layout_width="45dp" android:layout_height="wrap_content"
-            android:text="›" android:textColor="#FFFFFF" android:gravity="center" android:textSize="28sp" />
-    </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical" android:paddingTop="10dp" android:paddingBottom="8dp">
-        <LinearLayout android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:orientation="vertical">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="4dp">
+        <LinearLayout android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="match_parent" android:orientation="vertical" android:gravity="center_vertical">
+            <TextView android:id="@+id/widgetSelectedDay" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="27 Oct 2026"
+                android:textColor="#CCB8E8" android:textSize="10sp"/>
             <TextView android:id="@+id/widgetSecond" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:text="POST • STORY" android:textColor="#C3B3FF"
-                android:textSize="10sp" android:maxLines="1" />
+                android:layout_height="wrap_content" android:layout_marginTop="3dp"
+                android:text="CALENDAR" android:textColor="#D2C4FF"
+                android:textSize="10sp" android:textStyle="bold" android:maxLines="1"/>
             <TextView android:id="@+id/widgetNext" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:text="Festival poster" android:textColor="#FFFFFF"
-                android:textSize="17sp" android:textStyle="bold" android:maxLines="2" />
+                android:layout_height="wrap_content" android:text="No scheduled posts"
+                android:textColor="#FFFFFF" android:textSize="16sp" android:textStyle="bold"
+                android:maxLines="2" android:ellipsize="end"/>
             <TextView android:id="@+id/widgetThird" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:textColor="#9FABC4" android:textSize="10sp"
-                android:maxLines="1" />
+                android:layout_height="wrap_content" android:layout_marginTop="2dp"
+                android:text="All accounts" android:textColor="#C1B8D4"
+                android:textSize="10sp" android:maxLines="2"/>
+            <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:orientation="horizontal" android:gravity="center_vertical" android:layout_marginTop="6dp">
+                <TextView android:id="@+id/widgetPrevPost" android:layout_width="25dp"
+                    android:layout_height="30dp" android:gravity="center"
+                    android:text="‹" android:textSize="26sp" android:textColor="#D8C9FF"/>
+                <TextView android:id="@+id/widgetPostPosition" android:layout_width="0dp"
+                    android:layout_weight="1" android:layout_height="wrap_content"
+                    android:text="0/0" android:textColor="#BFB6DA" android:gravity="center"
+                    android:textSize="10sp"/>
+                <TextView android:id="@+id/widgetNextPost" android:layout_width="25dp"
+                    android:layout_height="30dp" android:gravity="center"
+                    android:text="›" android:textSize="26sp" android:textColor="#D8C9FF"/>
+            </LinearLayout>
         </LinearLayout>
-        <ImageView android:id="@+id/widgetPoster" android:layout_width="82dp" android:layout_height="108dp" android:layout_marginStart="6dp"
-            android:scaleType="fitCenter" android:contentDescription="Selected post original poster preview"/>
-        <LinearLayout android:layout_width="66dp" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginStart="6dp">
-            <TextView android:id="@+id/widgetOpen" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="View" android:textSize="12sp" android:textColor="#FFFFFF" android:gravity="center"
-                android:padding="10dp" android:background="@drawable/widget_view_bg" />
-            <TextView android:id="@+id/widgetShare" android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="Share" android:textSize="12sp" android:textColor="#FFFFFF" android:gravity="center"
-                android:padding="10dp" android:layout_marginTop="8dp" android:background="@drawable/widget_share_bg" />
+        <FrameLayout android:layout_width="90dp" android:layout_height="112dp"
+            android:layout_marginHorizontal="5dp">
+            <ImageView android:id="@+id/widgetPoster" android:layout_width="match_parent"
+                android:layout_height="match_parent" android:scaleType="fitCenter"
+                android:contentDescription="Scheduled post thumbnail, tap View for full preview"/>
+            <TextView android:id="@+id/widgetOpen" android:layout_width="match_parent"
+                android:layout_height="match_parent" android:text=""
+                android:contentDescription="Open full poster preview"/>
+        </FrameLayout>
+        <LinearLayout android:layout_width="67dp" android:layout_height="match_parent"
+            android:orientation="vertical" android:gravity="center_vertical">
+            <TextView android:id="@+id/widgetCreate" android:layout_width="match_parent"
+                android:layout_height="40dp" android:gravity="center"
+                android:text="Create" android:textSize="12sp" android:textColor="#FFFFFF"
+                android:textStyle="bold" android:background="@drawable/widget_view_bg"/>
+            <TextView android:id="@+id/widgetUpload" android:layout_width="match_parent"
+                android:layout_height="40dp" android:layout_marginTop="7dp"
+                android:gravity="center" android:text="Upload" android:textSize="12sp"
+                android:textColor="#FFFFFF" android:background="@drawable/widget_share_bg"/>
+            <TextView android:id="@+id/widgetShare" android:layout_width="match_parent"
+                android:layout_height="24dp" android:layout_marginTop="4dp"
+                android:gravity="center" android:text="Share" android:textSize="10sp"
+                android:textColor="#D7C9FF"/>
         </LinearLayout>
-    </LinearLayout>
-    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:orientation="horizontal" android:gravity="center_vertical">
-        <TextView android:id="@+id/widgetPrevPost" android:layout_width="50dp" android:layout_height="wrap_content"
-            android:text="◀" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />
-        <TextView android:id="@+id/widgetPostPosition" android:layout_width="0dp" android:layout_weight="1" android:layout_height="wrap_content"
-            android:text="" android:gravity="center"
-            android:textColor="#8987AB" android:textSize="9sp" />
-        <TextView android:id="@+id/widgetNextPost" android:layout_width="50dp" android:layout_height="wrap_content"
-            android:text="▶" android:textColor="#C8B9FF" android:gravity="center" android:textSize="18sp" />
     </LinearLayout>
 </LinearLayout>

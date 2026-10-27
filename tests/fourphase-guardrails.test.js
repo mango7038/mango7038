@@ -20,7 +20,7 @@ assert(html.includes('reviewedRec=null;'),'ZIP account mismatches must never aut
 assert(html.includes('Server queue heartbeat received.'),'Backend scheduler telemetry not visible');
 assert(html.includes('Use Schedule selected: only WordPress can confirm a publishing schedule.'),'Bulk actions must not fake a server schedule');
 assert(html.includes('Server jobs cannot be paused locally'),'Local pause must not touch live server jobs');
-assert(widget.includes('inActiveWorkspace(p,workspace)'),'Android widget must isolate Instagram workspaces');
+assert(widget.includes('for(Item item:onDate(root,day))'),'Widget dots and previews must reflect all connected accounts and identical active-job data');
 assert(bridge.includes('platform.equals("google") ? placement.equals("update")'),'GBP location publishing must use dedicated placement');
 assert(bridge.includes('accounts/[0-9]+/locations/[0-9]+'),'GBP must validate a business location ID');
 console.log('PostFlow four-phase parser, account isolation, cron telemetry and publishing guardrails passed.');

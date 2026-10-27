@@ -134,8 +134,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         try{return Instant.ofEpochSecond(unix).atZone(EventScheduler.ZONE).format(DateTimeFormatter.ofPattern("hh:mm a",Locale.ENGLISH));}
         catch(Exception ignored){return "";}
     }
-    private static List<Item> onDate(Context c,LocalDate day){
-        JSONObject root=state(c);
+    private static List<Item> onDate(Context c,LocalDate day){return onDate(state(c),day);}
+    private static List<Item> onDate(JSONObject root,LocalDate day){
         List<Item> out=new ArrayList<>();
         Set<String> handledPosts=new HashSet<>();
         Set<String> handledJobs=new HashSet<>();
@@ -266,17 +266,22 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             open.putExtra("media_id",current.mediaId);
             open.putExtra("caption",current.caption);
             open.putExtra("title",current.title);
+            open.putExtra("account",current.account);
+            open.putExtra("scheduled_time",current.time);
+            open.putExtra("media_url",current.remoteUrl);
         }
         open.setData(Uri.parse("postflow-preview://widget/"+id+"/"+day.toString()+"/"+index));
         rv.setOnClickPendingIntent(R.id.widgetOpen,PendingIntent.getActivity(c,id*100+6,open,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
         Bitmap preview=current==null?null:thumbnail(c,current.mediaId);
+        if(preview==null&&current!=null&&!current.remoteUrl.isEmpty())
+            preview=WidgetImageCache.get(c,current.remoteUrl);
         if(preview!=null){
             rv.setImageViewBitmap(R.id.widgetPoster,preview);
             rv.setViewVisibility(R.id.widgetPoster,android.view.View.VISIBLE);
         }else rv.setViewVisibility(R.id.widgetPoster,android.view.View.GONE);
         boolean shareable=current!=null&&MediaContentProvider.valid(current.mediaId)&&MediaContentProvider.mediaFile(c,current.mediaId).isFile();
         rv.setViewVisibility(R.id.widgetShare,shareable?android.view.View.VISIBLE:android.view.View.GONE);
-        rv.setViewVisibility(R.id.widgetOpen,shareable?android.view.View.VISIBLE:android.view.View.GONE);
+        rv.setViewVisibility(R.id.widgetOpen,current!=null&&!current.mediaId.isEmpty()||current!=null&&!current.remoteUrl.isEmpty()?android.view.View.VISIBLE:android.view.View.GONE);
         if(shareable){
             Intent share=new Intent(c,WidgetShareActivity.class);
             share.putExtra("media_id",current.mediaId);
@@ -300,9 +305,9 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         try{return BitmapFactory.decodeFile(file.getAbsolutePath(),opts);}catch(Exception e){return null;}
     }
     /** The markers and previews use identical, account-independent active-job filtering. */
-    private static int[] markers(Context c,LocalDate day){
+    private static int[] markers(JSONObject root,LocalDate day){
         boolean story=false,post=false,festival=false;
-        for(Item item:onDate(c,day)){
+        for(Item item:onDate(root,day)){
             if("STORY".equals(item.kind))story=true;
             else if("POST".equals(item.kind))post=true;
             else if("FESTIVAL".equals(item.kind))festival=true;
@@ -317,6 +322,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         canvas.scale(scale,scale);
         Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG|Paint.FILTER_BITMAP_FLAG|Paint.SUBPIXEL_TEXT_FLAG);
         LocalDate start=selected.minusDays(shown/2);
+        JSONObject root=state(c);
         for(int i=0;i<shown;i++){
             LocalDate date=start.plusDays(i);
             float cx=slot*(i+.5f);
@@ -332,7 +338,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             paint.setTextSize(24);
             String dayNumber=String.valueOf(date.getDayOfMonth());
             canvas.drawText(dayNumber,cx-paint.measureText(dayNumber)/2,66,paint);
-            int[] dots=markers(c,date);
+            int[] dots=markers(root,date);
             int count=0;
             for(int color:dots)if(color!=0)count++;
             int n=0;

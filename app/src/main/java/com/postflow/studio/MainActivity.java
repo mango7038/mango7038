@@ -30,6 +30,7 @@ import org.json.JSONObject;
 public final class MainActivity extends Activity {
     private static final int FILE_PICKER = 2002;
     private static final int BACKUP_PICKER = 2003;
+    private static final int LARGE_ZIP_PICKER = 2004;
     private WebView web;
     private NativeGlassBar glassBar;
     private android.view.View glassScrim;
@@ -114,16 +115,68 @@ public final class MainActivity extends Activity {
             Uri selected=data.getData();
             new Thread(()->restoreArchive(selected)).start();
         }
+        if(requestCode == LARGE_ZIP_PICKER){
+            if(resultCode==RESULT_OK&&data!=null&&data.getData()!=null)importLargeZip(data.getData());
+            return;
+        }
         if(requestCode == FILE_PICKER && fileCallback!=null){
             java.util.ArrayList<Uri> picked=new java.util.ArrayList<>();
             if(resultCode==RESULT_OK && data!=null){
                 if(data.getClipData()!=null){for(int i=0;i<data.getClipData().getItemCount();i++){Uri uri=data.getClipData().getItemAt(i).getUri();if(uri!=null&&!picked.contains(uri))picked.add(uri);}}
                 if(data.getData()!=null&&!picked.contains(data.getData()))picked.add(data.getData());
             }
+            // Reroute large ZIPs before WebView/JSZip buffers them into RAM.
+            if(picked.size()==1&&isLargeZip(picked.get(0))){
+                Uri large=picked.get(0);
+                fileCallback.onReceiveValue(null);fileCallback=null;
+                importLargeZip(large);
+                return;
+            }
             fileCallback.onReceiveValue(picked.isEmpty()?null:picked.toArray(new Uri[0]));
             fileCallback=null;
         }
     }
+    public void launchLargeZipPicker(){
+        runOnUiThread(()->{
+            Intent pick=new Intent(Intent.ACTION_OPEN_DOCUMENT).setType("application/zip");
+            pick.addCategory(Intent.CATEGORY_OPENABLE);
+            pick.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try{startActivityForResult(pick,LARGE_ZIP_PICKER);}
+            catch(Exception ex){showError("Could not open ZIP picker");}
+        });
+    }
+    private boolean isLargeZip(Uri uri){
+        if(uri==null)return false;
+        try(android.database.Cursor cursor=getContentResolver().query(uri,
+                new String[]{android.provider.OpenableColumns.DISPLAY_NAME,android.provider.OpenableColumns.SIZE},
+                null,null,null)){
+            if(cursor!=null&&cursor.moveToFirst()){
+                String name=cursor.getString(0);
+                long bytes=cursor.isNull(1)?0:cursor.getLong(1);
+                String mime=getContentResolver().getType(uri);
+                return bytes>200L*1024*1024 &&
+                    ((name!=null&&name.toLowerCase(java.util.Locale.ROOT).endsWith(".zip"))||
+                     "application/zip".equals(mime)||"application/x-zip-compressed".equals(mime));
+            }
+        }catch(Exception ignored){}
+        return false;
+    }
+    private void importLargeZip(Uri uri){
+        showError("Large ZIP detected: importing with native streaming");
+        new Thread(()->{
+            JSONObject response;
+            try{response=LargeZipImporter.extract(this,uri);}
+            catch(Exception error){
+                response=new JSONObject();
+                try{response.put("ok",false);response.put("error",error.getMessage());}catch(Exception ignored){}
+            }
+            String payload=JSONObject.quote(response.toString());
+            runOnUiThread(()->{
+                if(web!=null)web.evaluateJavascript("window.onPostFlowLargeZipResult("+payload+")",null);
+            });
+        },"postflow-zip-stream").start();
+    }
+
     private void unlockAndLoad(){
         installGlassChrome();
         web.loadUrl("file:///android_asset/index.html");

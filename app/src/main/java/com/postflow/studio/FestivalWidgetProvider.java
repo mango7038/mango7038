@@ -173,9 +173,18 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             while(keys.hasNext()){
                 JSONObject tracked=pending.optJSONObject(keys.next());
                 if(tracked==null||!isActive(tracked.optString("status")))continue;
+                // A WordPress job's authoritative final status overrides stale local upload state.
+                boolean onServer=false;
+                if(server!=null)for(int j=0;j<server.length();j++){
+                    JSONObject saved=server.optJSONObject(j);
+                    if(saved!=null&&saved.optInt("id",-1)==tracked.optInt("serverId",-2)){
+                        onServer=true;break;
+                    }
+                }
+                if(onServer)continue;
                 String postId=tracked.optString("postId","");
                 JSONObject p=findPost(root,postId);
-                if(p==null||handledPosts.contains(postId))continue;
+                if(p==null)continue;
                 long scheduled=tracked.optLong("scheduled_at",0);
                 String date=scheduled>0?istDay(scheduled):p.optString("date");
                 if(!day.toString().equals(date))continue;

@@ -367,6 +367,7 @@ public final class NativeBridge {
             activity.startActivity(Intent.createChooser(i,"Share with"));
         });
     }
+    @JavascriptInterface public void importLargeZip(){activity.launchLargeZipPicker();}
     @JavascriptInterface public void importBackup(){activity.launchBackupPicker();}
     @JavascriptInterface public void exportBackup(){
         new Thread(()->{

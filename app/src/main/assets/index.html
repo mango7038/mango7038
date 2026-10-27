@@ -1379,12 +1379,14 @@ function discardNativeZip(){
  for(const entry of nativeZipSession.entries||[])try{window.PostFlowNative?.deleteMedia?.(entry.mediaId)}catch(e){}
  nativeZipSession=null;
 }
-window.onPostFlowLargeZipResult=function(raw){
+window.onPostFlowLargeZipResult=function(payload){
+ let stagedEntries=[];
  try{
-  const result=JSON.parse(raw);
+  const result=JSON.parse(payload);
   if(!result.ok)return toast('Large ZIP import failed: '+String(result.error||'Unknown error').slice(0,120));
   discardNativeZip();
-  const entries=result.entries||[],metadata=result.metadata||[];
+  const entries=Array.isArray(result.entries)?result.entries:[],metadata=Array.isArray(result.metadata)?result.metadata:[];
+  stagedEntries=entries;
   if(!entries.length)return toast('No supported media in ZIP');
   const txt=metadata.filter(m=>String(m.path).toLowerCase().endsWith('.txt'));
   const structuredFiles=txt.filter(m=>String(m.text).toUpperCase().includes('[POST]'));
@@ -1393,8 +1395,9 @@ window.onPostFlowLargeZipResult=function(raw){
    return toast('Multiple [POST] files found. Keep only one structured TXT');
   }
   const chosen=structuredFiles[0]||txt.find(m=>String(m.path).toLowerCase().endsWith('captions.txt'))||null;
-  const raw=chosen?.text||'',structured=structuredFiles.length?parseFestivalPostTxt(raw):null;
-  const captions=chosen&&!structured?zipCaptionTextMap(raw):null;
+  const txtContent=chosen?.text||'';
+  const structured=structuredFiles.length?parseFestivalPostTxt(txtContent):null;
+  const captions=chosen&&!structured?zipCaptionTextMap(txtContent):null;
   const manifestFile=metadata.find(m=>String(m.path).toLowerCase().endsWith('manifest.csv'));
   const manifest=manifestFile?csvRows(manifestFile.text):{};
   const mode=document.getElementById('zipMode')?.value||'draft';
@@ -1423,9 +1426,16 @@ window.onPostFlowLargeZipResult=function(raw){
   });
   nativeZipSession={entries,metadata,manifest,name:'Large ZIP'};
   zipReviewSession={file:null,mode,targets,rows,nativeEntries:entries};
+  stagedEntries=[];
   showZipReview();
   toast('Large ZIP ready: '+entries.length+' media items reviewed before scheduling');
- }catch(e){console.error(e);toast('Large ZIP review error: '+String(e.message||e).slice(0,110));discardNativeZip()}
+ }catch(e){
+  console.error('Large ZIP preview failed',e);
+  for(const entry of stagedEntries)try{window.PostFlowNative?.deleteMedia?.(entry.mediaId)}catch(cleanupError){}
+  if(nativeZipSession)discardNativeZip();
+  zipReviewSession=null;
+  toast('Large ZIP review error: '+String(e.message||e).slice(0,110));
+ }
 };
 
 async function processZip(){

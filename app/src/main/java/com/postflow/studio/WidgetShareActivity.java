@@ -28,20 +28,8 @@ public final class WidgetShareActivity extends Activity {
         if(caption!=null&&!caption.isEmpty())send.putExtra(Intent.EXTRA_TEXT,caption);
         send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         send.setClipData(ClipData.newUri(getContentResolver(),"PostFlow media",uri));
-        // Prefer WhatsApp's official share entry point, never automate its final Publish action.
-        boolean preferred=false;
-        for(String pkg:new String[]{"com.whatsapp","com.whatsapp.w4b"}){
-            try{
-                Intent direct=new Intent(send).setPackage(pkg);
-                if(direct.resolveActivity(getPackageManager())!=null){
-                    startActivity(direct);preferred=true;break;
-                }
-            }catch(ActivityNotFoundException ignored){}
-        }
-        if(!preferred){
-            try{startActivity(Intent.createChooser(send,"Share poster to WhatsApp Status"));}
-            catch(ActivityNotFoundException e){fail("No compatible sharing app installed");return;}
-        }
+        try{startActivity(Intent.createChooser(send,"Share PostFlow poster"));}
+        catch(ActivityNotFoundException e){fail("No compatible sharing app installed");return;}
         finish();
     }
     private void fail(String message){Toast.makeText(this,message,Toast.LENGTH_LONG).show();finish();}

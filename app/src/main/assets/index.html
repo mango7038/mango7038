@@ -276,7 +276,7 @@ body:not(.native-glass) main{padding-bottom:calc(155px + env(safe-area-inset-bot
 .pf-story-progress{position:absolute;z-index:2;top:10px;left:9px;right:9px;height:3px;background:rgba(255,255,255,.85);border-radius:5px}
 .pf-story-username{position:absolute;z-index:2;top:20px;left:12px;color:white!important;text-shadow:0 1px 4px rgba(0,0,0,.8);font-size:12px;font-weight:700}
 .pf-story-reply{position:absolute;z-index:2;bottom:19px;left:15px;width:63%;height:36px;padding:10px 12px;border:1px solid #ffffff9c;border-radius:30px;color:white!important;background:#11182744;font-size:12px}
-</style></head><body>
+.pf-auto-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.pf-auto-rule{border:1px solid var(--line);border-radius:14px;padding:14px;margin:12px 0;background:var(--card)}.pf-auto-meta{display:flex;flex-wrap:wrap;gap:7px;margin:9px 0}.pf-auto-meta span{font-size:11px;border-radius:18px;padding:5px 9px;background:#30294f;color:#c8b9ff}.pf-auto-rule p{white-space:pre-wrap;overflow-wrap:anywhere}.pf-auto-actions{display:flex;flex-wrap:wrap;gap:8px}.pf-auto-actions button{flex:1;min-width:85px}.pf-auto-note{padding:12px;border:1px solid #987bff66;border-radius:12px;font-size:12px;color:var(--muted);line-height:1.6}.pf-auto-preview{padding:12px;border:1px dashed var(--line);border-radius:12px;margin-top:12px}.pf-auto-preview p{white-space:pre-wrap;overflow-wrap:anywhere}@media(max-width:420px){.pf-auto-grid{grid-template-columns:1fr}}</style></head><body>
 <header><div class="brand"><div class="logo">✦</div><div><h1>PostFlow Studio</h1><small>SMART SOCIAL SCHEDULER</small></div></div><button class="circle" aria-label="Open menu" onclick="openMenu()">☰</button></header>
 <main id="page"></main><nav id="nav"></nav><div id="overlay"></div><div id="toast" class="toast hidden"></div><script src="jszip.min.js"></script><script>
 
@@ -585,7 +585,7 @@ function duplicateLibraryPost(id){
 }
 
 function openMenu(){
- const main=[['home','⌂ Home'],['queue','▤ My Posts'],['calendar','▦ Calendar'],['library','▧ Content Library'],['accounts','◎ Connected Accounts'],['settings','⚙ Settings']];
+ const main=[['home','⌂ Home'],['queue','▤ My Posts'],['calendar','▦ Calendar'],['library','▧ Content Library'],['accounts','◎ Connected Accounts'],['automations','⚡ Auto Reply'],['settings','⚙ Settings']];
  showModal({title:'Your workspace',body:'<p class="sub">Everything you need, without the clutter.</p><div class="pf-menu-options">'+
  main.map(([p,t])=>'<button class="btn secondary" onclick="closeModal();route(\''+p+'\')">'+t+'</button>').join('')+
  '</div><details class="advanced-settings"><summary>Advanced tools</summary><div class="pf-menu-options" style="margin-top:12px">'+
@@ -659,6 +659,7 @@ function render(){navRender();const el=document.getElementById('page');let c=cou
  +'<div class="section"><h3>Workspace essentials</h3></div><div class="pf-quick-row">'+btn('♡ Publishing Health','openHealthMonitor()','secondary')+btn('▦ Feed Preview','openFeedPreview()','secondary')+'</div><div class="card"><div class="item" onclick="route(\'calendar\')"><div class="thumb" style="height:48px;width:48px;min-width:48px">▦</div><div class="body"><b>Content calendar</b><small>Dates, festivals and post previews</small></div><span class="rowbtn">›</span></div><div class="item" onclick="route(\'accounts\')"><div class="thumb" style="height:48px;width:48px;min-width:48px">◎</div><div class="body"><b>Connected accounts</b><small>'+instagramWorkspaces().length+' Instagram workspace(s) synced</small></div><span class="rowbtn">›</span></div></div>';
 }
 else if(page==='queue'){let posts=workspacePosts(state.posts).sort((a,b)=>(a.date+a.time).localeCompare(b.date+b.time));el.innerHTML=accountWorkspaceBadge()+`<h2>Your Posts</h2><p class="sub">Tap a post to review or edit. WordPress server jobs are protected from local-only changes.</p><div class="actions">${btn('＋ New Post','compose()','')}${btn('View Calendar',"route('calendar')")}</div><div class="section"><h3>${posts.length} Posts</h3><a onclick="setBulkMode(!bulkMode)">${bulkMode?'Cancel selection':'☑ Bulk Select'}</a></div>${bulkMode?'<div class="card" style="margin-bottom:12px"><div class="topline"><b>'+bulkSelected.size+' selected</b><a onclick="bulkSelectAll()">Select all</a></div><div class="actions" style="margin-top:12px">'+btn('Pause selected','bulkChangeStatus("paused")','mini')+btn('Schedule selected','bulkScheduleSelected()','mini')+btn('Edit selected','bulkEdit()','mini')+btn('Delete selected','bulkDelete()','mini secondary')+'</div></div>':''}<div class="card">${posts.length?posts.map(postItem).join(''):'<div class="empty">Your queue is empty.</div>'}</div>`}
+else if(page==='automations'){automationRender(el);}
 else if(page==='calendar'){calendarRender(el);el.insertAdjacentHTML('afterbegin',accountWorkspaceBadge());}
 else if(page==='library'){el.innerHTML=accountWorkspaceBadge()+`<h2>Smart ZIP Library</h2><p class="sub">Upload dated festivals, promotions, posters or Reels. Reviewed items can be submitted to WordPress for publishing at ${esc(state.settings.time)} IST when an authorized account is selected.</p><div class="banner"><div><b>Auto Schedule from ZIP</b><small>Date detection · Caption suggestions<br>Duplicate checks · Manual edits</small></div>${btn('Upload ZIP','openZip()','')}</div><div class="actions" style="margin:14px 0">${btn("Prepare Festival Drafts","prepareFestivalDrafts()","secondary")}${btn("Caption Templates","captionLibrary()","secondary")}</div><div class="section"><h3>ZIP Imports</h3></div><div class="actions">${btn('Regenerate ZIP Captions','regenerateZipCaptions()','secondary')}</div><div class="note">Imported captions use filenames or manifest titles. Review each caption before publishing. This is an offline template generator, not AI vision.</div>${(state.lastZipCaptionWarnings||[]).length?'<div class="detail-error"><b>Caption mapping warnings:</b><p>'+state.lastZipCaptionWarnings.map(esc).join('; ')+'</p></div>':''}<div class="card">${state.imports.length?state.imports.map(i=>`<div class="item"><div class="thumb">▣</div><div class="body"><b>${esc(i.name)}</b><small>${esc(i.imported)} • ${i.added} added • ${i.duplicates} duplicates</small></div></div>`).join(''):'<div class="empty">No ZIP files imported.</div>'}</div><div class="section"><h3>Media & Posts</h3><a onclick="showBrandLibrary()">Favorites & Categories →</a></div>${pfLibraryControls()}<div class="pf-library-collection ${pfLibraryView==='grid'?'is-grid':''}">${pfLibraryItems().length?pfLibraryItems().map(postItem).join(''):'<div class="empty">No items match this filter.</div>'}</div><div class="actions" style="margin-top:14px">${btn('Publishing Health','openHealthMonitor()','secondary')}${btn('Full Backup','exportBackup()','secondary')}</div>`}
 else if(page==='events'){let evs=nextEvents();el.innerHTML=`<h2>Festivals & Events</h2><p class="sub">2026 Maharashtra festival dates included; add your own occasions, client birthdays and reminders. Festival dates for other years should be verified.</p><div class="actions">${btn('＋ Add Event','editEvent()','')}${btn('Add Fixed Indian Days','seedIndianDays()')}${btn('Calendar',"route('calendar')")}</div><div class="section"><h3>Upcoming Events</h3></div><div class="card">${evs.length?evs.map(eventItem).join(''):'<div class="empty">Add your first festival or birthday.</div>'}</div><div class="section"><h3>Quick note</h3></div><div class="note">Yearly birthdays repeat automatically. Indian lunar festivals may change date every year and should be verified annually. Android notifications and home-screen Festival Widget are included in the native app project. Add the widget from your launcher after installation.</div>`}
@@ -702,6 +703,70 @@ function calendarDots(date){
  return '<span class="calendar-dots" aria-label="'+(markers.length?markers.length+' content types':'No content')+'">'+visible.map(k=>'<span class="calendar-dot" style="background:'+CALENDAR_COLORS[k]+'" title="'+k.replace('_',' ')+'"></span>').join('')+(markers.length>4?'<span class="calendar-more">+'+(markers.length-4)+'</span>':'')+'</span>';
 }
 function calendarLegend(){return '<div class="calendar-legend">'+CALENDAR_LEGEND.map(([key,label])=>'<span class="calendar-legend-item"><span class="calendar-dot" style="background:'+CALENDAR_COLORS[key]+'"></span>'+label+'</span>').join('')+'</div>'}
+
+// Phase 1: local rule editor only. No webhook, Meta API or automatic sending is enabled.
+function automationRules(){return Array.isArray(state.automationRules)?state.automationRules:[]}
+function automationAccounts(){return instagramWorkspaces()}
+function automationScope(rule){return rule.mediaId?'Specific post / reel':'Any post / reel'}
+function automationRender(el){
+ const accounts=automationAccounts(),active=activeWorkspace(),rules=automationRules().filter(r=>!active||r.accountKey===accountKey(active));
+ el.innerHTML=accountWorkspaceBadge()+'<h2>Instagram Auto Reply</h2><p class="sub">Configure keyword-triggered comment replies and private DM templates.</p><div class="pf-auto-note"><b>Phase 1 · Configuration only.</b> Rules are saved on this device. No Instagram comments are monitored, and no messages are sent until the approved Meta webhook and server worker are connected in later phases.</div><div class="section"><h3>Automation Rules</h3><a onclick="automationEdit()">+ New Rule</a></div>'+
+ (!accounts.length?'<div class="card"><b>Connect an Instagram account first</b><p class="sub">An Instagram workspace is required before creating rules.</p>'+btn('Connected Accounts',"route('accounts')",'secondary')+'</div>':'')+
+ (rules.length?rules.map(r=>'<div class="pf-auto-rule"><div class="topline"><b>'+esc(r.name)+'</b><span class="tag '+(r.enabled?'green':'')+'">'+(r.enabled?'Enabled (local)':'Disabled')+'</span></div><div class="pf-auto-meta"><span>'+esc(r.accountLabel||r.accountKey)+'</span><span>'+esc(automationScope(r))+'</span><span>'+esc(r.matchMode==='any'?'Any comment':r.keywords.join(', '))+'</span></div><small>Public reply: '+(r.publicEnabled?'On':'Off')+' · Private DM: '+(r.dmEnabled?'On':'Off')+'</small><div class="pf-auto-actions" style="margin-top:12px">'+btn('Edit',"automationEdit('"+esc(r.id)+"')",'secondary')+btn(r.enabled?'Disable':'Enable',"automationToggle('"+esc(r.id)+"')",'secondary')+btn('Delete',"automationDelete('"+esc(r.id)+"')",'secondary')+'</div></div>').join(''):'<div class="card"><div class="empty">No automation rules yet. Create your first keyword rule.</div></div>')+
+ '<div class="pf-auto-note" style="margin-top:14px">Enabling a rule only marks it ready for future server integration. It does not activate live auto-replies.</div>';
+}
+function automationEdit(id){
+ const rule=automationRules().find(r=>r.id===id),accounts=automationAccounts();
+ if(!accounts.length)return toast('Connect an Instagram account first.');
+ const selected=rule?.accountKey||(activeWorkspace()?accountKey(activeWorkspace()):accountKey(accounts[0]));
+ const r=rule||{name:'',accountKey:selected,mediaId:'',matchMode:'keywords',keywords:['PRICE'],publicEnabled:true,publicText:'Thanks for commenting! Please check your DM.',dmEnabled:true,dmText:'Hi! Here are the details you requested.',enabled:false};
+ const options=accounts.map(a=>'<option value="'+esc(accountKey(a))+'" '+(r.accountKey===accountKey(a)?'selected':'')+'>'+esc(a.name||a.username||a.external_id)+'</option>').join('');
+ editing=id||null;
+ showModal({title:id?'Edit Automation':'New Automation',body:
+ '<div class="pf-auto-note">Draft rules are stored locally. Meta integration is not active yet.</div>'+
+ '<div class="field"><label>Rule name</label><input id="autoName" maxlength="80" value="'+esc(r.name)+'" placeholder="e.g. Price enquiry"></div>'+
+ '<div class="field"><label>Instagram account</label><select id="autoAccount">'+options+'</select></div>'+
+ '<div class="field"><label>Post / Reel scope</label><select id="autoScope" onchange="automationScopeChanged()"><option value="all" '+(!r.mediaId?'selected':'')+'>All posts and reels</option><option value="specific" '+(r.mediaId?'selected':'')+'>Specific Instagram media ID</option></select></div>'+
+ '<div class="field" id="autoMediaWrap" style="'+(!r.mediaId?'display:none':'')+'"><label>Instagram media ID (not URL)</label><input id="autoMedia" maxlength="100" value="'+esc(r.mediaId)+'" placeholder="Instagram media ID"></div>'+
+ '<div class="field"><label>Trigger</label><select id="autoMatch" onchange="automationMatchChanged()"><option value="keywords" '+(r.matchMode!=='any'?'selected':'')+'>Comment contains keyword</option><option value="any" '+(r.matchMode==='any'?'selected':'')+'>Any comment</option></select></div>'+
+ '<div class="field" id="autoKeywordsWrap" style="'+(r.matchMode==='any'?'display:none':'')+'"><label>Keywords (comma separated)</label><input id="autoKeywords" maxlength="300" value="'+esc(r.keywords.join(', '))+'" placeholder="PRICE, LINK, INFO"></div>'+
+ '<div class="check"><input type="checkbox" id="autoPublic" '+(r.publicEnabled?'checked':'')+'><label for="autoPublic">Public comment reply</label></div>'+
+ '<div class="field"><label>Public reply message</label><textarea id="autoPublicText" maxlength="1000" rows="3">'+esc(r.publicText)+'</textarea></div>'+
+ '<div class="check"><input type="checkbox" id="autoDm" '+(r.dmEnabled?'checked':'')+'><label for="autoDm">Private comment-to-DM reply</label></div>'+
+ '<div class="field"><label>Private reply message</label><textarea id="autoDmText" maxlength="1000" rows="4">'+esc(r.dmText)+'</textarea></div>'+
+ '<div class="pf-auto-actions">'+btn('Preview','automationPreview()','secondary')+btn('Save Rule','automationSave()','')+'</div><div id="autoPreview" class="pf-auto-preview" style="display:none"></div>'});
+}
+function automationScopeChanged(){document.getElementById('autoMediaWrap').style.display=document.getElementById('autoScope').value==='specific'?'':'none'}
+function automationMatchChanged(){document.getElementById('autoKeywordsWrap').style.display=document.getElementById('autoMatch').value==='any'?'none':''}
+function automationDraft(){
+ const matchMode=document.getElementById('autoMatch').value,mediaId=document.getElementById('autoScope').value==='specific'?document.getElementById('autoMedia').value.trim():'';
+ return {name:document.getElementById('autoName').value.trim(),accountKey:document.getElementById('autoAccount').value,mediaId,matchMode,keywords:matchMode==='any'?[]:[...new Set(document.getElementById('autoKeywords').value.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean))],publicEnabled:document.getElementById('autoPublic').checked,publicText:document.getElementById('autoPublicText').value.trim(),dmEnabled:document.getElementById('autoDm').checked,dmText:document.getElementById('autoDmText').value.trim()};
+}
+function automationValidate(r){
+ if(!r.name)return 'Enter a rule name.';
+ if(!automationAccounts().some(a=>accountKey(a)===r.accountKey))return 'Select a connected Instagram account.';
+ if(document.getElementById('autoScope').value==='specific'&&!/^[0-9]{5,100}$/.test(r.mediaId))return 'Enter a valid numeric Instagram media ID.';
+ if(r.matchMode==='keywords'&&(!r.keywords.length||r.keywords.length>20))return 'Enter 1 to 20 keywords.';
+ if(!r.publicEnabled&&!r.dmEnabled)return 'Enable at least one reply action.';
+ if(r.publicEnabled&&!r.publicText)return 'Enter the public reply message.';
+ if(r.dmEnabled&&!r.dmText)return 'Enter the private DM message.';
+ return '';
+}
+function automationPreview(){
+ const r=automationDraft(),error=automationValidate(r);if(error)return toast(error);
+ const box=document.getElementById('autoPreview');box.style.display='block';
+ box.innerHTML='<b>Rule Preview (no message will be sent)</b><p>Trigger: '+esc(r.matchMode==='any'?'Any comment':r.keywords.join(', '))+'</p><p>Public reply: '+esc(r.publicEnabled?r.publicText:'Disabled')+'</p><p>Private DM: '+esc(r.dmEnabled?r.dmText:'Disabled')+'</p>';
+}
+function automationSave(){
+ const r=automationDraft(),error=automationValidate(r);if(error)return toast(error);
+ const account=automationAccounts().find(a=>accountKey(a)===r.accountKey),old=automationRules().find(x=>x.id===editing);
+ r.id=old?.id||uid();r.enabled=old?.enabled||false;r.accountLabel=account?.name||account?.username||r.accountKey;r.updatedAt=new Date().toISOString();
+ state.automationRules=old?automationRules().map(x=>x.id===old.id?r:x):[...automationRules(),r];
+ if(!save())return;closeModal();route('automations');toast('Automation rule saved locally.');
+}
+function automationToggle(id){const r=automationRules().find(x=>x.id===id);if(!r)return;r.enabled=!r.enabled;save();render();toast(r.enabled?'Rule enabled locally; live sending is not active.':'Rule disabled.')}
+function automationDelete(id){if(!confirm('Delete this automation rule?'))return;state.automationRules=automationRules().filter(x=>x.id!==id);save();render();toast('Rule deleted.')}
+
 function calendarRender(el){let y=calMonth.getFullYear(),m=calMonth.getMonth(),start=(new Date(y,m,1).getDay()+6)%7,last=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate(),monthstr=calMonth.toLocaleDateString('en-IN',{month:'long',year:'numeric'});let cells='';for(let i=0;i<42;i++){let day=i-start+1,d=new Date(y,m,day),s=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;cells+=`<button class="day ${day<1||day>last?'disabled':''} ${s===dateLocal()?'today':''} ${s===selectedDay?'selected':''}" onclick="selectDay('${s}')"><strong>${d.getDate()}</strong>${calendarDots(s)}</button>`}el.innerHTML=`<h2>Content Calendar</h2><p class="sub">Scheduled posts, festivals, custom events and birthdays.</p><div class="card"><div class="monthnav"><button onclick="changeMonth(-1)">‹</button><b>${monthstr}</b><button onclick="changeMonth(1)">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(d=>`<div class="week">${d}</div>`).join('')}${cells}</div>${calendarLegend()}</div><div class="section"><h3>${selectedDay?fmt(selectedDay):'Select a date'}</h3><a onclick="editEvent()">Add Event +</a></div><div class="card">${selectedDay?([ ...workspacePosts(state.posts).filter(p=>p.date===selectedDay).map(postItem),...state.events.filter(e=>e.date===selectedDay||(e.repeat&&e.date.slice(5)===selectedDay.slice(5))).map(eventItem)].join('')||'<div class="empty">Nothing planned on this date.</div>'):'<div class="empty">Tap any date to view or edit scheduled content.</div>'}</div>`}
 function changeMonth(d){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+d,1);render()}
 function selectDay(d){selectedDay=d;render()}

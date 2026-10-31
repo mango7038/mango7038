@@ -768,7 +768,7 @@ function automationToggle(id){const r=automationRules().find(x=>x.id===id);if(!r
 function automationDelete(id){if(!confirm('Delete this automation rule?'))return;state.automationRules=automationRules().filter(x=>x.id!==id);save();render();toast('Rule deleted.')}
 
 function automationSaveConnection(){
- const url=document.getElementById('autoServerUrl').value.trim().replace(/\\/$/,'');
+ const url=document.getElementById('autoServerUrl').value.trim().replace(/\/$/,'');
  if(url&&!/^https:\/\/[a-z0-9.-]+(?::\\d+)?(?:\/[^?#]*)?$/i.test(url))return toast('Use an HTTPS server URL.');
  state.automationServerUrl=url;state.automationServerKey=document.getElementById('autoServerKey').value.trim();save();toast('Backend connection settings saved on device.');
 }

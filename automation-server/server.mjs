@@ -10,7 +10,7 @@ const TOKENS=(()=>{try{return JSON.parse(process.env.META_INSTAGRAM_ACCOUNTS_JSO
 if(!API_KEY||!APP_SECRET||!VERIFY_TOKEN)throw Error('Set POSTFLOW_AUTOMATION_API_KEY, META_APP_SECRET and META_WEBHOOK_VERIFY_TOKEN');
 let db={rules:[],events:[],deliveries:[]},pending=Promise.resolve();
 try{db={...db,...JSON.parse(await fs.readFile(DATA_FILE,'utf8'))}}catch(e){if(e.code!=='ENOENT')throw e}
-const json=(res,code,obj)=>{res.writeHead(code,{'content-type':'application/json','cache-control':'no-store'});res.end(JSON.stringify(obj))};
+const json=(res,code,obj)=>{res.writeHead(code,{'content-type':'application/json','cache-control':'no-store','access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type','access-control-allow-methods':'GET, PUT, POST, OPTIONS'});res.end(JSON.stringify(obj))};
 const persist=()=>{pending=pending.then(async()=>{const temp=DATA_FILE+'.tmp';await fs.writeFile(temp,JSON.stringify(db));await fs.rename(temp,DATA_FILE)});return pending};
 const validKey=req=>{const value=req.headers.authorization||'';const a=Buffer.from(value),b=Buffer.from('Bearer '+API_KEY);return a.length===b.length&&crypto.timingSafeEqual(a,b)};
 const getBody=async req=>{let chunks=[],length=0;for await(const c of req){length+=c.length;if(length>1048576)throw Error('Payload too large');chunks.push(c)}return Buffer.concat(chunks)};
@@ -49,6 +49,7 @@ async function processQueue(){
 const server=http.createServer(async(req,res)=>{
  try{
  const url=new URL(req.url,'http://localhost');
+ if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-headers':'authorization, content-type','access-control-allow-methods':'GET, PUT, POST, OPTIONS'});return res.end()}
  if(url.pathname==='/health'&&req.method==='GET')return json(res,200,{ok:true,configuredAccounts:Object.keys(TOKENS).length});
  if(url.pathname==='/webhook'&&req.method==='GET')return url.searchParams.get('hub.mode')==='subscribe'&&url.searchParams.get('hub.verify_token')===VERIFY_TOKEN?(res.writeHead(200,{'content-type':'text/plain'}),res.end(url.searchParams.get('hub.challenge')||'')):json(res,403,{error:'Verification failed'});
  if(url.pathname==='/webhook'&&req.method==='POST'){

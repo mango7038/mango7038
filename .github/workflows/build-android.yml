@@ -89,6 +89,8 @@ jobs:
           assert(html.includes('Check server jobs'), 'Publishing troubleshooting action missing');
           console.log('JavaScript syntax, core features, glass navigation and local-vs-server status checks passed');
           NODE
+      - name: Validate automation backend syntax
+        run: node --check automation-server/server.mjs
       - name: Four-phase integration guardrails
         run: node tests/fourphase-guardrails.test.js
       - name: Validate Instagram Story no-crop pipeline
@@ -117,11 +119,11 @@ jobs:
           "$AAPT" dump badging "$APK" > "$RUNNER_TEMP/postflow-badging.txt"
           head -n 15 "$RUNNER_TEMP/postflow-badging.txt"
           grep -q "name='com.postflow.studio.permanent'" "$RUNNER_TEMP/postflow-badging.txt"
-          grep -q "versionCode='19'" "$RUNNER_TEMP/postflow-badging.txt"
+          grep -q "versionCode='20'" "$RUNNER_TEMP/postflow-badging.txt"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose "$APK"
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: PostFlow-Studio-8.2.3-calendar-colour-update
+          name: PostFlow-Studio-8.3.0-automation-release
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error

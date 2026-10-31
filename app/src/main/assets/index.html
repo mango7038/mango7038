@@ -710,10 +710,10 @@ function automationAccounts(){return instagramWorkspaces()}
 function automationScope(rule){return rule.mediaId?'Specific post / reel':'Any post / reel'}
 function automationRender(el){
  const accounts=automationAccounts(),active=activeWorkspace(),rules=automationRules().filter(r=>!active||r.accountKey===accountKey(active));
- el.innerHTML=accountWorkspaceBadge()+'<h2>Instagram Auto Reply</h2><p class="sub">Configure keyword-triggered comment replies and private DM templates.</p><div class="pf-auto-note"><b>Phase 1 · Configuration only.</b> Rules are saved on this device. No Instagram comments are monitored, and no messages are sent until the approved Meta webhook and server worker are connected in later phases.</div><div class="section"><h3>Automation Rules</h3><a onclick="automationEdit()">+ New Rule</a></div>'+
+ el.innerHTML=accountWorkspaceBadge()+'<h2>Instagram Auto Reply</h2><p class="sub">Configure keyword-triggered comment replies and private DM templates.</p><div class="pf-auto-note"><b>Server integration.</b> Rules are stored locally until synced. Live replies require a deployed server, configured Meta credentials, approved permissions and an active webhook.</div><div class="section"><h3>Automation Rules</h3><a onclick="automationEdit()">+ New Rule</a></div>'+
  (!accounts.length?'<div class="card"><b>Connect an Instagram account first</b><p class="sub">An Instagram workspace is required before creating rules.</p>'+btn('Connected Accounts',"route('accounts')",'secondary')+'</div>':'')+
  (rules.length?rules.map(r=>'<div class="pf-auto-rule"><div class="topline"><b>'+esc(r.name)+'</b><span class="tag '+(r.enabled?'green':'')+'">'+(r.enabled?'Enabled (local)':'Disabled')+'</span></div><div class="pf-auto-meta"><span>'+esc(r.accountLabel||r.accountKey)+'</span><span>'+esc(automationScope(r))+'</span><span>'+esc(r.matchMode==='any'?'Any comment':r.keywords.join(', '))+'</span></div><small>Public reply: '+(r.publicEnabled?'On':'Off')+' · Private DM: '+(r.dmEnabled?'On':'Off')+'</small><div class="pf-auto-actions" style="margin-top:12px">'+btn('Edit',"automationEdit('"+esc(r.id)+"')",'secondary')+btn(r.enabled?'Disable':'Enable',"automationToggle('"+esc(r.id)+"')",'secondary')+btn('Delete',"automationDelete('"+esc(r.id)+"')",'secondary')+'</div></div>').join(''):'<div class="card"><div class="empty">No automation rules yet. Create your first keyword rule.</div></div>')+
- '<div class="pf-auto-note" style="margin-top:14px">Enabling a rule only marks it ready for future server integration. It does not activate live auto-replies.</div>';
+ '<div class="pf-auto-note" style="margin-top:14px">Local rules are not live until successfully synced to your configured backend. Never paste a Meta access token here.</div><div class="section"><h3>Backend &amp; Delivery Analytics</h3></div><div class="card"><div class="field"><label>Automation server HTTPS URL</label><input id="autoServerUrl" placeholder="https://your-server.example" value="'+esc(state.automationServerUrl||'')+'"></div><div class="field"><label>Backend API key (owner only)</label><input id="autoServerKey" type="password" placeholder="Backend API key" value="'+esc(state.automationServerKey||'')+'"></div><div class="pf-auto-actions">'+btn('Save Connection','automationSaveConnection()','secondary')+btn('Sync Rules','automationSync()','secondary')+btn('Refresh Analytics','automationAnalytics()','secondary')+'</div><div id="autoStats" class="pf-auto-preview">'+esc(state.automationSyncStatus||'Not connected to server.')+'</div></div>';
 }
 function automationEdit(id){
  const rule=automationRules().find(r=>r.id===id),accounts=automationAccounts();
@@ -723,7 +723,7 @@ function automationEdit(id){
  const options=accounts.map(a=>'<option value="'+esc(accountKey(a))+'" '+(r.accountKey===accountKey(a)?'selected':'')+'>'+esc(a.name||a.username||a.external_id)+'</option>').join('');
  editing=id||null;
  showModal({title:id?'Edit Automation':'New Automation',body:
- '<div class="pf-auto-note">Draft rules are stored locally. Meta integration is not active yet.</div>'+
+ '<div class="pf-auto-note">Rules can be synced to the deployed Meta webhook server using the Automations screen.</div>'+
  '<div class="field"><label>Rule name</label><input id="autoName" maxlength="80" value="'+esc(r.name)+'" placeholder="e.g. Price enquiry"></div>'+
  '<div class="field"><label>Instagram account</label><select id="autoAccount">'+options+'</select></div>'+
  '<div class="field"><label>Post / Reel scope</label><select id="autoScope" onchange="automationScopeChanged()"><option value="all" '+(!r.mediaId?'selected':'')+'>All posts and reels</option><option value="specific" '+(r.mediaId?'selected':'')+'>Specific Instagram media ID</option></select></div>'+
@@ -762,11 +762,28 @@ function automationSave(){
  const account=automationAccounts().find(a=>accountKey(a)===r.accountKey),old=automationRules().find(x=>x.id===editing);
  r.id=old?.id||uid();r.enabled=old?.enabled||false;r.accountLabel=account?.name||account?.username||r.accountKey;r.updatedAt=new Date().toISOString();
  state.automationRules=old?automationRules().map(x=>x.id===old.id?r:x):[...automationRules(),r];
- if(!save())return;closeModal();route('automations');toast('Automation rule saved locally.');
+ if(!save())return;closeModal();route('automations');toast('Rule saved. Sync Rules to publish to server.');
 }
-function automationToggle(id){const r=automationRules().find(x=>x.id===id);if(!r)return;r.enabled=!r.enabled;save();render();toast(r.enabled?'Rule enabled locally; live sending is not active.':'Rule disabled.')}
+function automationToggle(id){const r=automationRules().find(x=>x.id===id);if(!r)return;r.enabled=!r.enabled;save();render();toast(r.enabled?'Rule enabled locally. Sync to server to activate.':'Rule disabled locally. Sync to server to stop live sending.')}
 function automationDelete(id){if(!confirm('Delete this automation rule?'))return;state.automationRules=automationRules().filter(x=>x.id!==id);save();render();toast('Rule deleted.')}
 
+function automationSaveConnection(){
+ const url=document.getElementById('autoServerUrl').value.trim().replace(/\\/$/,'');
+ if(url&&!/^https:\/\/[a-z0-9.-]+(?::\\d+)?(?:\/[^?#]*)?$/i.test(url))return toast('Use an HTTPS server URL.');
+ state.automationServerUrl=url;state.automationServerKey=document.getElementById('autoServerKey').value.trim();save();toast('Backend connection settings saved on device.');
+}
+async function automationRequest(path,method='GET',body){
+ const base=state.automationServerUrl,key=state.automationServerKey;
+ if(!base||!key)throw Error('Configure and save HTTPS backend URL and API key first.');
+ const response=await fetch(base+path,{method,headers:{'authorization':'Bearer '+key,'content-type':'application/json'},body:body?JSON.stringify(body):undefined,signal:AbortSignal.timeout(15000)});
+ const data=await response.json();if(!response.ok)throw Error(data.error||'Server error '+response.status);return data;
+}
+async function automationSync(){
+ automationSaveConnection();try{const data=await automationRequest('/api/rules','PUT',{rules:automationRules()});state.automationSyncStatus='Synced '+data.count+' rule(s) at '+new Date().toLocaleString();save();render();toast('Rules synced to backend.')}catch(e){state.automationSyncStatus='Sync failed: '+String(e.message);save();render();toast('Sync failed. Local rules unchanged.')}
+}
+async function automationAnalytics(){
+ automationSaveConnection();try{const data=await automationRequest('/api/analytics');const el=document.getElementById('autoStats');if(el)el.innerHTML='<b>Delivery Analytics</b><p>Logged attempts: '+Number(data.total||0)+' · Sent: '+Number(data.sent||0)+' · Failed: '+Number(data.failed||0)+' · Queued: '+Number(data.queued||0)+'</p>'+((data.recent||[]).slice(0,12).map(x=>'<p><small>'+esc(x.at)+' · '+esc(x.status)+' · '+esc(x.commentId)+' '+esc(x.error||'')+'</small></p>').join('')||'<p>No deliveries yet.</p>');}catch(e){toast('Analytics unavailable: '+String(e.message))}
+}
 function calendarRender(el){let y=calMonth.getFullYear(),m=calMonth.getMonth(),start=(new Date(y,m,1).getDay()+6)%7,last=new Date(y,m+1,0).getDate(),prev=new Date(y,m,0).getDate(),monthstr=calMonth.toLocaleDateString('en-IN',{month:'long',year:'numeric'});let cells='';for(let i=0;i<42;i++){let day=i-start+1,d=new Date(y,m,day),s=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;cells+=`<button class="day ${day<1||day>last?'disabled':''} ${s===dateLocal()?'today':''} ${s===selectedDay?'selected':''}" onclick="selectDay('${s}')"><strong>${d.getDate()}</strong>${calendarDots(s)}</button>`}el.innerHTML=`<h2>Content Calendar</h2><p class="sub">Scheduled posts, festivals, custom events and birthdays.</p><div class="card"><div class="monthnav"><button onclick="changeMonth(-1)">‹</button><b>${monthstr}</b><button onclick="changeMonth(1)">›</button></div><div class="calendar">${['M','T','W','T','F','S','S'].map(d=>`<div class="week">${d}</div>`).join('')}${cells}</div>${calendarLegend()}</div><div class="section"><h3>${selectedDay?fmt(selectedDay):'Select a date'}</h3><a onclick="editEvent()">Add Event +</a></div><div class="card">${selectedDay?([ ...workspacePosts(state.posts).filter(p=>p.date===selectedDay).map(postItem),...state.events.filter(e=>e.date===selectedDay||(e.repeat&&e.date.slice(5)===selectedDay.slice(5))).map(eventItem)].join('')||'<div class="empty">Nothing planned on this date.</div>'):'<div class="empty">Tap any date to view or edit scheduled content.</div>'}</div>`}
 function changeMonth(d){calMonth=new Date(calMonth.getFullYear(),calMonth.getMonth()+d,1);render()}
 function selectDay(d){selectedDay=d;render()}

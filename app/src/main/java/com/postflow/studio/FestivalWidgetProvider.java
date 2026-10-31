@@ -1,6 +1,7 @@
 package com.postflow.studio;
 
 import android.app.PendingIntent;
+import android.app.AlarmManager;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
@@ -33,6 +34,8 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     private static final String ACTION_DATE="com.postflow.studio.widget.DATE";
     private static final String ACTION_ITEM="com.postflow.studio.widget.ITEM";
     private static final String ACTION_TODAY="com.postflow.studio.widget.TODAY";
+    private static final String ACTION_RESET="com.postflow.studio.widget.RESET";
+    private static final long IDLE_MS=10*60*1000L;
     private static final String PREF="postflow_calendar_widget";
     private static final DateTimeFormatter LABEL=DateTimeFormatter.ofPattern("dd MMM yyyy",Locale.ENGLISH);
 
@@ -46,20 +49,44 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     @Override public void onReceive(Context c,Intent intent){
         super.onReceive(c,intent);
         String action=intent.getAction();
-        if(ACTION_DATE.equals(action)||ACTION_ITEM.equals(action)||ACTION_TODAY.equals(action)){
+        if(ACTION_DATE.equals(action)||ACTION_ITEM.equals(action)||ACTION_TODAY.equals(action)||ACTION_RESET.equals(action)){
             int id=intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,-1);
             if(id<0)return;
             String key="day_"+id;
             LocalDate date;
             try{android.content.SharedPreferences sp=c.getSharedPreferences(PREF,0);date=sp.getBoolean("follow_today_"+id,true)?LocalDate.now(EventScheduler.ZONE):LocalDate.parse(sp.getString(key,LocalDate.now(EventScheduler.ZONE).toString()));}
             catch(Exception e){date=LocalDate.now(EventScheduler.ZONE);}
+            if(ACTION_RESET.equals(action)){
+                long deadline=c.getSharedPreferences(PREF,0).getLong("idle_until_"+id,0);
+                if(deadline==0||System.currentTimeMillis()<deadline)return;
+                date=LocalDate.now(EventScheduler.ZONE);
+            }
             if(ACTION_TODAY.equals(action))date=LocalDate.now(EventScheduler.ZONE);
             if(ACTION_DATE.equals(action))date=date.plusDays(Math.max(-7,Math.min(7,intent.getIntExtra("delta",0))));
-            c.getSharedPreferences(PREF,0).edit().putBoolean("follow_today_"+id,ACTION_TODAY.equals(action)).putString(key,date.toString()).putInt("item_"+id,ACTION_ITEM.equals(action)?Math.max(0,intent.getIntExtra("index",0)):0).apply();
+            c.getSharedPreferences(PREF,0).edit().putBoolean("follow_today_"+id,ACTION_TODAY.equals(action)||ACTION_RESET.equals(action)).putString(key,date.toString()).putInt("item_"+id,ACTION_ITEM.equals(action)?Math.max(0,intent.getIntExtra("index",0)):0).apply();
+            if(ACTION_DATE.equals(action)||ACTION_ITEM.equals(action))scheduleIdleReset(c,id);
+            else cancelIdleReset(c,id);
             updateOne(c,AppWidgetManager.getInstance(c),id);
         }
     }
 
+    private static PendingIntent resetIntent(Context c,int id){
+        Intent intent=new Intent(c,FestivalWidgetProvider.class).setAction(ACTION_RESET);
+        intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID,id);
+        intent.setData(Uri.parse("postflow-widget-reset://"+id));
+        return PendingIntent.getBroadcast(c,id,intent,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+    }
+    private static void cancelIdleReset(Context c,int id){
+        android.app.AlarmManager alarm=(android.app.AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        if(alarm!=null)alarm.cancel(resetIntent(c,id));
+        c.getSharedPreferences(PREF,0).edit().remove("idle_until_"+id).apply();
+    }
+    private static void scheduleIdleReset(Context c,int id){
+        long deadline=System.currentTimeMillis()+IDLE_MS;
+        c.getSharedPreferences(PREF,0).edit().putLong("idle_until_"+id,deadline).apply();
+        android.app.AlarmManager alarm=(android.app.AlarmManager)c.getSystemService(Context.ALARM_SERVICE);
+        if(alarm!=null)alarm.set(AlarmManager.RTC,deadline,resetIntent(c,id));
+    }
     @Override public void onUpdate(Context c,AppWidgetManager manager,int[] ids){updateAll(c,manager,ids);}
     @Override public void onAppWidgetOptionsChanged(Context c,AppWidgetManager manager,int id,android.os.Bundle options){
         super.onAppWidgetOptionsChanged(c,manager,id,options);
@@ -75,7 +102,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     }
     @Override public void onDeleted(Context c,int[] ids){
         android.content.SharedPreferences.Editor ed=c.getSharedPreferences(PREF,0).edit();
-        for(int id:ids){ed.remove("day_"+id);ed.remove("item_"+id);ed.remove("follow_today_"+id);}ed.apply();
+        for(int id:ids){ed.remove("day_"+id);ed.remove("item_"+id);ed.remove("follow_today_"+id);ed.remove("idle_until_"+id);cancelIdleReset(c,id);}ed.apply();
     }
     static void updateAll(Context c,AppWidgetManager manager,int[] ids){
         for(int id:ids)updateOne(c,manager,id);
@@ -243,7 +270,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
     private static void updateOne(Context c,AppWidgetManager manager,int id){
         LocalDate today=LocalDate.now(EventScheduler.ZONE),day;
         android.content.SharedPreferences prefs=c.getSharedPreferences(PREF,0);
-        try{day=prefs.getBoolean("follow_today_"+id,true)?today:LocalDate.parse(prefs.getString("day_"+id,today.toString()));}catch(Exception ex){day=today;}
+        try{boolean expired=!prefs.getBoolean("follow_today_"+id,true)&&prefs.getLong("idle_until_"+id,0)>0&&System.currentTimeMillis()>=prefs.getLong("idle_until_"+id,0);if(expired){prefs.edit().putBoolean("follow_today_"+id,true).remove("idle_until_"+id).apply();}day=(expired||prefs.getBoolean("follow_today_"+id,true))?today:LocalDate.parse(prefs.getString("day_"+id,today.toString()));}catch(Exception ex){day=today;}
         List<Item> posts=onDate(c,day);
         int index=Math.max(0,Math.min(prefs.getInt("item_"+id,0),Math.max(0,posts.size()-1)));
         Item current=posts.isEmpty()?null:posts.get(index);
@@ -268,6 +295,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         rv.setTextViewText(R.id.widgetSecond,current==null?"CALENDAR":current.kind+" · "+current.status.replace('_',' ').toUpperCase(Locale.ENGLISH));
         rv.setTextViewText(R.id.widgetThird,current==null?"Create or upload a poster for this date":current.account+" · "+current.time);
         rv.setOnClickPendingIntent(R.id.widgetCreate,appAction(c,id,"compose",40));
+        rv.setTextViewText(R.id.widgetUpload,current==null?"Upload":"Share");
         rv.setOnClickPendingIntent(R.id.widgetUpload,appAction(c,id,"openZip",41));
         rv.setOnClickPendingIntent(R.id.widgetToday,broadcast(c,id,3,ACTION_TODAY,0,0));
         if(posts.size()>1){
@@ -301,6 +329,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
         }
         boolean shareable=current!=null&&MediaContentProvider.valid(current.mediaId)&&MediaContentProvider.mediaFile(c,current.mediaId).isFile();
         rv.setViewVisibility(R.id.widgetShare,shareable?android.view.View.VISIBLE:android.view.View.GONE);
+        if(current!=null&&!shareable)rv.setTextViewText(R.id.widgetUpload,"View");
         rv.setViewVisibility(R.id.widgetOpen,current!=null&&!current.mediaId.isEmpty()||current!=null&&!current.remoteUrl.isEmpty()?android.view.View.VISIBLE:android.view.View.GONE);
         if(shareable){
             Intent share=new Intent(c,WidgetShareActivity.class);
@@ -308,7 +337,7 @@ public final class FestivalWidgetProvider extends AppWidgetProvider {
             share.putExtra("caption",current.caption);
             share.putExtra("title",current.title);
             share.setData(Uri.parse("postflow-share://widget/"+id+"/"+current.mediaId));
-            rv.setOnClickPendingIntent(R.id.widgetShare,PendingIntent.getActivity(c,id*100+7,share,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
+            rv.setOnClickPendingIntent(R.id.widgetUpload,PendingIntent.getActivity(c,id*100+7,share,PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE));
         }
         manager.updateAppWidget(id,rv);
     }

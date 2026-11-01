@@ -791,7 +791,36 @@ function showModal(html){try{window.PostFlowNative?.glassNavigation?.(false)}cat
  document.getElementById('overlay').innerHTML=`<div class="modal"><div class="sheet"><div class="sheet-head"><h3>${html.title}</h3><button class="x" onclick="closeModal()">×</button></div>${html.body}</div></div>`;document.body.classList.add('no-scroll')}
 function closeModal(){try{window.PostFlowNative?.glassNavigation?.(true)}catch(e){}
  if(typeof carouselPreviewUrls!=='undefined'){carouselPreviewUrls.forEach(URL.revokeObjectURL);carouselPreviewUrls=[];}document.getElementById('overlay').innerHTML='';document.body.classList.remove('no-scroll')}
-function compose(){editedPosterFile=null;clearSelectedMediaSnapshot();posterPendingLayers=null;pendingCarouselFiles=[];editPost(null)}
+let newPostContentChoice='post';
+function compose(){
+ editedPosterFile=null;clearSelectedMediaSnapshot();posterPendingLayers=null;pendingCarouselFiles=[];
+ showModal({title:'What would you like to create?',body:
+ '<p class="sub">Choose the publishing format first. You can upload media and schedule it in the next steps.</p>'+
+ '<div class="pf-content-choices">'+
+ '<button type="button" class="pf-content-choice" onclick="startNewPostType(\'post\')"><b>▧ Post</b><small>Single photo · Instagram Feed</small></button>'+
+ '<button type="button" class="pf-content-choice" onclick="startNewPostType(\'story\')"><b>◉ Story</b><small>Vertical image or video · 9:16</small></button>'+
+ '<button type="button" class="pf-content-choice" onclick="startNewPostType(\'reel\')"><b>▶ Reel</b><small>Video · Instagram Reels</small></button>'+
+ '<button type="button" class="pf-content-choice" onclick="startNewPostType(\'carousel\')"><b>▤ Carousel</b><small>2–10 images or a long-image split</small></button></div>'+
+ '<style>.pf-content-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:16px 0}.pf-content-choice{border:1px solid #515879;border-radius:16px;background:#252b43;color:#f4f1ff;padding:20px 12px;text-align:left;min-height:112px;display:flex;flex-direction:column;gap:12px;cursor:pointer}.pf-content-choice b{font-size:18px}.pf-content-choice small{color:#c2c7db;line-height:1.4}@media(max-width:360px){.pf-content-choices{grid-template-columns:1fr}}</style>'});
+}
+function startNewPostType(type){
+ if(!['post','story','reel','carousel'].includes(type))return;
+ newPostContentChoice=type;
+ editPost(null);
+ const kind=document.getElementById('pKind');if(kind)kind.value=type==='reel'?'reel':type==='carousel'?'carousel':'image';
+ const ratio=document.getElementById('pRatio');if(ratio)ratio.value=type==='story'||type==='reel'?'9:16':type==='carousel'?'4:5':'original';
+ for(const [key] of DEST){const checkbox=document.getElementById('tar_'+key);if(checkbox&&['ig_feed','ig_story','fb_feed','fb_story'].includes(key))checkbox.checked=type==='story'?key.endsWith('_story'):key.endsWith('_feed');}
+ document.querySelectorAll('#overlay input[data-wp-destination]').forEach(el=>{el.checked=type==='story'?el.dataset.placement==='story':el.dataset.placement==='feed';});
+ const heading=document.querySelector('#overlay .wizard-head b');if(heading)heading.textContent='New '+type.charAt(0).toUpperCase()+type.slice(1)+' · '+(activeWorkspace()?.name||'All Accounts');
+ const mediaLabel=document.querySelector('label[for="pMedia"]');
+ const info=document.getElementById('mediaQualityInfo');
+ if(info)info.textContent=type==='reel'?'Select a video for your Reel.':type==='story'?'Choose a Story image or video. Recommended 9:16.':type==='carousel'?'Select multiple photos or a long image to prepare carousel slides.':'Select a photo for your Feed post.';
+ const carousel=document.getElementById('pCarousel');if(carousel?.parentElement)carousel.parentElement.style.display=type==='carousel'?'':'none';
+ if(type==='reel'){const single=document.getElementById('pMedia');if(single)single.accept='video/mp4,video/quicktime';}
+ if(type==='carousel'){const single=document.getElementById('pMedia');if(single)single.accept='image/jpeg,image/png,image/webp';}
+ updateRatioPreview();
+}
+
 function placementsForAccount(a){let platform=a.platform;
  if(platform==='Instagram')return DEST.filter(x=>x[0].startsWith('ig_'));
  if(platform==='Facebook Pages')return DEST.filter(x=>x[0].startsWith('fb_'));

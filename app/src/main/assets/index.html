@@ -841,7 +841,7 @@ function editPost(id){
   <div class="card"><img id="postLargePreview" src="${esc(d.thumb||'')}" alt="Poster preview" style="display:${d.thumb?'block':'none'};width:100%;max-height:460px;object-fit:contain;border-radius:12px"><div id="mediaQualityInfo" class="note">Select a poster to inspect file size, dimensions and aspect ratio.</div><div class="actions">${btn('Open Image Editor','openPosterEditor()','mini secondary')}${btn('Generate Caption','suggestCaption()','mini secondary')}</div><p class="sub">Edit a copy; original attached media is preserved. Choose an image to preview or edit.</p></div>
   <div class="field"><label>Attach / Replace Original Image or Video</label><input id="pMedia" type="file" accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" onchange="previewSelectedPostMedia()"></div><div class="field"><label>Select 1–10 photos (1 = single post; 2–10 = carousel)</label><input id="pCarousel" type="file" accept="image/jpeg,image/png" multiple onchange="previewCarouselMedia()"><small id="carouselSelected">Existing carousel: ${(d.mediaIds||[]).length} images. JPG/PNG only.</small></div>
   ${p&&p.mediaId?`<div class="note">Attached media is saved locally (${esc(p.mediaName||'Original file')}). Changing media is optional.</div>`:''}
-  <div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><div class="field"><label>Instagram Story fit (9:16)</label><select id="pStoryStyle" onchange="updateStoryPreview()">
+  <div id="carouselSplitOffer" class="card" hidden></div><div class="carousel-preview" id="carouselPreviewGrid"></div><div class="card"><b>Media Ratio & Preview</b><div class="field"><label>Aspect ratio</label><select id="pRatio" onchange="updateRatioPreview()"><option value="original" ${(d.ratio||'original')==='original'?'selected':''}>Original</option><option value="1:1" ${d.ratio==='1:1'?'selected':''}>Square 1:1</option><option value="4:5" ${d.ratio==='4:5'?'selected':''}>Feed 4:5</option><option value="9:16" ${d.ratio==='9:16'?'selected':''}>Story / Reel 9:16</option></select></div><div class="field"><label>Display</label><select id="pFit" onchange="updateRatioPreview()"><option value="contain" ${d.fitMode!=='cover'?'selected':''}>Fit entire image</option><option value="cover" ${d.fitMode==='cover'?'selected':''}>Fill frame (preview crop)</option></select></div><div class="field"><label>Instagram Story fit (9:16)</label><select id="pStoryStyle" onchange="updateStoryPreview()">
     <option value="fit_blur" ${(d.storyStyle||'fit_blur')==='fit_blur'?'selected':''}>Fit Original + Blurred Background (default)</option>
     <option value="fit_solid" ${d.storyStyle==='fit_solid'?'selected':''}>Fit Original + Solid Background</option>
     <option value="fit_gradient" ${d.storyStyle==='fit_gradient'?'selected':''}>Fit Original + Gradient</option>
@@ -1000,6 +1000,61 @@ function renderCarouselSelected(){
  if(n){const hero=document.getElementById('postLargePreview');if(hero&&carouselPreviewUrls[0]){hero.src=carouselPreviewUrls[0];hero.style.display='block';}}
 }
 
+
+// Explicit, user-controlled panoramic carousel splitting. Never split on upload alone.
+function carouselSplitterOffer(){
+ const area=document.getElementById('carouselSplitOffer'),kind=document.getElementById('pKind');
+ if(!area||kind?.value!=='carousel')return;
+ const m=selectedMediaSnapshot;
+ if(!m?.width||!m?.height||m.width/m.height<1.6){area.hidden=true;return}
+ area.hidden=false;
+ const count=Math.ceil((m.width/m.height)/0.8);
+ area.innerHTML='<b>Wide image detected · '+m.width+' × '+m.height+'</b><p class="sub">Create a seamless carousel? Your original remains unchanged. Splitting is optional.</p>'+
+ '<div class="field"><label>Slide ratio</label><select id="splitRatio"><option value="4:5">4:5 Portrait</option><option value="1:1">1:1 Square</option></select></div>'+
+ '<div class="field"><label>Edges</label><select id="splitBackground"><option value="extend">Extend matching background (no content crop)</option><option value="crop">Fill by cropping edges</option></select></div>'+
+ '<small>Estimated '+Math.min(10,count)+' slides at 4:5. Preview before scheduling.</small>'+
+ '<div class="actions"><button type="button" class="btn" onclick="splitSelectedCarousel()">Split into Carousel</button><button type="button" class="btn secondary" onclick="document.getElementById(\'carouselSplitOffer\').hidden=true">Keep Original</button></div>';
+}
+async function splitSelectedCarousel(){
+ const file=document.getElementById('pMedia')?.files?.[0];
+ if(!file||!file.type.startsWith('image/'))return toast('Choose a wide image first');
+ const ratio=document.getElementById('splitRatio')?.value||'4:5';
+ const extend=document.getElementById('splitBackground')?.value!=='crop';
+ const width=1080,height=ratio==='1:1'?1080:1350;
+ const button=document.querySelector('#carouselSplitOffer .btn');if(button)button.disabled=true;
+ try{
+  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Cannot read original image'));reader.readAsDataURL(file)});
+  const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error('Cannot open this image'));image.src=data});
+  const n=Math.ceil(img.naturalWidth/img.naturalHeight*height/width);
+  if(n<2||n>10)throw Error('This panorama requires '+n+' slides; supported range is 2–10');
+  const canvas=document.createElement('canvas');canvas.width=n*width;canvas.height=height;
+  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas unavailable');
+  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
+  const scale=extend?Math.min(canvas.width/img.width,canvas.height/img.height):Math.max(canvas.width/img.width,canvas.height/img.height);
+  const drawW=img.width*scale,drawH=img.height*scale;
+  if(extend){
+   ctx.save();ctx.filter='blur(40px)';const bgScale=Math.max(canvas.width/img.width,canvas.height/img.height);
+   ctx.drawImage(img,(canvas.width-img.width*bgScale)/2,(height-img.height*bgScale)/2,img.width*bgScale,img.height*bgScale);
+   ctx.restore();
+  }
+  ctx.drawImage(img,(canvas.width-drawW)/2,(height-drawH)/2,drawW,drawH);
+  const files=[];
+  for(let i=0;i<n;i++){
+   const tile=document.createElement('canvas');tile.width=width;tile.height=height;
+   tile.getContext('2d').drawImage(canvas,i*width,0,width,height,0,0,width,height);
+   const blob=await new Promise((resolve,reject)=>tile.toBlob(b=>b?resolve(b):reject(Error('Slide export failed')),'image/jpeg',0.93));
+   files.push(new File([blob],file.name.replace(/\.[^.]+$/,'')+'_slide_'+String(i+1).padStart(2,'0')+'.jpg',{type:'image/jpeg'}));
+  }
+  pendingCarouselFiles=files;
+  const kind=document.getElementById('pKind');if(kind)kind.value='carousel';
+  const source=document.getElementById('pMedia');if(source)source.value='';
+  clearSelectedMediaSnapshot();
+  const choice=document.getElementById('carouselSplitOffer');if(choice)choice.hidden=true;
+  const selected=document.getElementById('pRatio');if(selected)selected.value=ratio;
+  renderCarouselSelected();toast(n+' carousel slides ready. Review their order, then schedule.');
+ }catch(e){toast('Split failed: '+String(e.message||e).slice(0,100))}
+ finally{if(button)button.disabled=false}
+}
 let selectedMediaSnapshot=null,selectedMediaPromise=null,selectedMediaVersion=0,selectedMediaPreviewUrl=null;
 function clearSelectedMediaSnapshot(){
  selectedMediaVersion++;selectedMediaSnapshot=null;selectedMediaPromise=null;
@@ -1024,7 +1079,7 @@ function previewSelectedPostMedia(){
  editedPosterFile=null;clearSelectedMediaSnapshot();
  if(!file)return;
  pendingCarouselFiles=[];
- const kind=document.getElementById('pKind');if(kind)kind.value=file.type.startsWith('video/')?'reel':'image';
+ const kind=document.getElementById('pKind');if(kind)kind.value=file.type.startsWith('video/')?'reel':newPostContentChoice==='carousel'?'carousel':'image';
  const version=selectedMediaVersion;
  const label=document.getElementById('mediaQualityInfo');
  if(label)label.textContent='Inspecting and saving temporary media snapshot…';
@@ -1041,7 +1096,7 @@ function previewSelectedPostMedia(){
   if(label)label.textContent=mediaPreflightMessage(captured);
   if(file.type.startsWith('image/')){
    const img=new Image();
-   img.onload=()=>{if(version!==selectedMediaVersion)return;captured.width=img.naturalWidth;captured.height=img.naturalHeight;if(label)label.textContent=mediaPreflightMessage(captured);updateStoryPreview();};
+   img.onload=()=>{if(version!==selectedMediaVersion)return;captured.width=img.naturalWidth;captured.height=img.naturalHeight;if(label)label.textContent=mediaPreflightMessage(captured);carouselSplitterOffer();updateStoryPreview();};
    img.onerror=()=>{if(version===selectedMediaVersion&&label)label.textContent=mediaPreflightMessage(captured)+' · Could not inspect image dimensions';};
    img.src=selectedMediaPreviewUrl;
    if(preview){preview.src=selectedMediaPreviewUrl;preview.style.display='block';}
@@ -1125,7 +1180,7 @@ async function storePost(scheduleNow=false){
     const check=validScheduleIST(d,t);
     if(!check.ok){const error=document.getElementById('reviewTimeError');if(error){error.style.display='block';error.textContent=check.message;}return toast(check.message);}
     if(!window.PostFlowNative?.queueWordPressPost)return toast('Android publishing support unavailable.');
-    const chosenCarousel=pendingCarouselFiles.length>1||(pendingCarouselFiles.length===0&&document.getElementById('pKind')?.value==='carousel');
+    const chosenCarousel=document.getElementById('pKind')?.value==='carousel';
     if(selectedWP.some(x=>x.placement==='carousel')&&!chosenCarousel&&!((editing&&state.posts.find(x=>x.id===editing)?.mediaIds?.length>1)))return toast('Choose 2–10 carousel photos before selecting Carousel Feed.');
     if(chosenCarousel&&selectedWP.some(x=>x.placement==='story'))return toast('Carousel cannot be published as a Story. Select Feed or use one image.');
   }

@@ -851,7 +851,7 @@ let composerStage=1;
 function composerWordPressDestinations(){
  const accounts=(state.wpAccounts||[]).filter(a=>a.platform==='facebook'||a.platform==='instagram'||(a.platform==='google'&&a.publishing_supported));
  const chosen=[];
- const carousel=pendingCarouselFiles.length>1||(pendingCarouselFiles.length===0&&document.getElementById('pKind')?.value==='carousel');
+ const carousel=document.getElementById('pKind')?.value==='carousel';
  const reel=!carousel&&document.getElementById('pKind')?.value==='reel';
  const checks=[...document.querySelectorAll('#overlay input[data-wp-destination]')];
  for(const el of checks.filter(x=>x.checked)){
@@ -1293,14 +1293,14 @@ function festivalPostTargets(record,defaults){
  const platforms=String(record.platform||'instagram').toLowerCase().split(/[,|;]/).map(p=>p.trim()).filter(Boolean);
  const type=String(record.type||'post').toLowerCase().trim();
  const chosen=[];
- if(!['post','story','reel'].includes(type))return {targets:[],warning:'Unsupported placement: '+type};
+ if(!['post','story','reel','carousel'].includes(type))return {targets:[],warning:'Unsupported placement: '+type};
  for(const platform of platforms){
   if(platform==='instagram')chosen.push(type==='story'?'ig_story':'ig_feed');
   else if(platform==='facebook')chosen.push(type==='story'?'fb_story':'fb_feed');
   else return {targets:[],warning:'Unsupported platform: '+platform};
  }
  if(!chosen.length)return {targets:[],warning:'Missing publishing platform'};
- if(type==='reel')return {targets:[],warning:'Reel scheduling from TXT needs separate video support. Saved as draft.'};
+ 
  return {targets:[...new Set(chosen)],warning:''};
 }
 function validFestivalDateTime(date,time){
@@ -1569,8 +1569,10 @@ async function processZip(){
     const date=r?.date||parseManifestDate(meta.date)||guessDate(e.name)||'';
     const time=r?.time||meta.time||state.settings.time;
     if(!validFestivalDateTime(date,time))problems.push('Invalid date or time');
-    const kind=String(r?.type||'post').toLowerCase();
-    if(!['post','story'].includes(kind))problems.push('Unsupported post type');
+    const kind=String(r?.type||meta.type||meta.placement||'post').toLowerCase();
+    if(!['post','story','carousel','reel'].includes(kind))problems.push('Unsupported post type');
+    if(kind==='reel'&&!/\.(mp4|mov)$/i.test(e.name))problems.push('Reel requires a video file');
+    if(kind==='carousel'&&!/\.(png|jpe?g|webp)$/i.test(e.name))problems.push('Carousel requires image slides');
     if(r?.invalidTimezone)problems.push('Unsupported timezone; use Asia/Kolkata');
     if(r?.invalidPlacement)problems.push('Unsupported placement in TXT');
     if(r?.account_id||r?.account){const matchedAccount=String(r.account_id||r.account);const connected=(state.wpAccounts||[]).find(a=>a.platform==='instagram'&&(String(a.external_id)===matchedAccount||String(a.username||a.name||'').replace(/^@/,'').toLowerCase()===matchedAccount.replace(/^@/,'').toLowerCase()));if(!connected)problems.push('Specified Instagram account not connected');else if(activeWorkspace()&&accountKey(connected)!==state.activeWorkspace)problems.push('ZIP account does not match selected workspace');}
@@ -1591,7 +1593,7 @@ function showZipReview(){
  z.rows.map((r,i)=>'<div class="card" style="margin:12px 0"><b>'+esc(r.path)+'</b>'+
  (r.problems.length?'<div class="detail-error">'+r.problems.map(esc).join('; ')+'</div>':'')+
  '<div class="field"><label>Title</label><input id="zrtitle'+i+'" value="'+esc(r.title)+'"></div>'+
- '<div class="field"><label>Type</label><select id="zrtype'+i+'"><option value="post" '+(r.type==='post'?'selected':'')+'>Feed Post</option><option value="story" '+(r.type==='story'?'selected':'')+'>Story</option></select></div>'+
+ '<div class="field"><label>Type</label><select id="zrtype'+i+'"><option value="post" '+(r.type==='post'?'selected':'')+'>Feed Post</option><option value="story" '+(r.type==='story'?'selected':'')+'>Story</option><option value="carousel" '+(r.type==='carousel'?'selected':'')+'>Carousel</option><option value="reel" '+(r.type==='reel'?'selected':'')+'>Reel</option></select></div>'+
  '<div class="field"><label>Platform</label><select id="zrplatform'+i+'"><option value="instagram" '+(r.platforms.join(',')==='instagram'?'selected':'')+'>Instagram</option><option value="facebook" '+(r.platforms.join(',')==='facebook'?'selected':'')+'>Facebook</option><option value="instagram,facebook" '+(r.platforms.length===2?'selected':'')+'>Both</option></select></div>'+
  '<div class="layout-actions"><div class="field"><label>Date</label><input id="zrdate'+i+'" type="date" value="'+esc(r.date)+'"></div><div class="field"><label>Time (IST)</label><input id="zrtime'+i+'" type="time" value="'+esc(r.time)+'"></div></div>'+
  '<div class="field"><label>Greeting</label><textarea id="zrgreeting'+i+'">'+esc(r.greeting)+'</textarea></div>'+
@@ -1637,7 +1639,7 @@ async function importNativeZipAfterReview(){
    const title=rec?.title||titleFromName(entry.path);
    const post={id:uid(),title,caption:rec?.caption||zipCaption(title,pickCategory(title),entry.path),
     greeting:rec?.greeting||'',captionApproved:!!rec?.caption,captionSource:'Large ZIP TXT / manifest',
-    kind:video?'reel':'image',date:date||dateLocal(),time,targets:selected,
+    kind:rec?.type==='reel'?'reel':rec?.type==='carousel'?'carousel':'image',date:date||dateLocal(),time,targets:selected,
     accountTargets:{},workspaces:activeWorkspace()?[state.activeWorkspace]:[],status:'draft',
     thumb:entry.preview||'',fingerprint,origin:staging.name,category:pickCategory(title),
     mediaId:entry.mediaId,mediaName:safeFileName(entry.path),placement:rec?.type||'post',storyStyle:'fit_blur'};
@@ -1725,7 +1727,7 @@ async function importZipAfterReview(){
      }if(shouldSchedule)times.add(date+'|'+time)}
      if(!shouldSchedule)review++;
      const captionText=approved?.caption??rec?.caption??matched.caption??meta.caption;
-     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(approved?.greeting??rec?.greeting??''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:video?'reel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},workspaces:activeWorkspace()?[state.activeWorkspace]:[],status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:approved?.type||rec?.type||'post'};
+     const post={id:uid(),title,caption:zipCaption(title,category,f.name,captionText),greeting:String(approved?.greeting??rec?.greeting??''),captionApproved:!!String(captionText||'').trim(),captionSource:rec?.caption?'captions.txt [POST]':matched.caption?'captions.txt':meta.caption?'manifest.csv':'offline',kind:(approved?.type||rec?.type)==='reel'?'reel':(approved?.type||rec?.type)==='carousel'?'carousel':'image',date:date||dateLocal(),time,targets:[...selected],accountTargets:{},workspaces:activeWorkspace()?[state.activeWorkspace]:[],status:'draft',thumb,fingerprint,origin:file.name,category,mediaId,mediaName:safeFileName(f.name),placement:approved?.type||rec?.type||'post'};
      state.posts.push(post);
      if(shouldSchedule)toSubmit.push(post);
      added++;

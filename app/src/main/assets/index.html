@@ -1002,56 +1002,97 @@ function renderCarouselSelected(){
 
 
 // Explicit, user-controlled panoramic carousel splitting. Never split on upload alone.
+
+let carouselSplitSource=null,carouselSplitCanvas=null,carouselSplitSlides=0,carouselSplitRatio='4:5';
 function carouselSplitterOffer(){
- const area=document.getElementById('carouselSplitOffer'),kind=document.getElementById('pKind');
- if(!area||kind?.value!=='carousel')return;
- const m=selectedMediaSnapshot;
- if(!m?.width||!m?.height||m.width/m.height<1.6){area.hidden=true;return}
+ const area=document.getElementById('carouselSplitOffer'),kind=document.getElementById('pKind'),m=selectedMediaSnapshot;
+ if(!area||kind?.value!=='carousel'||!m?.width||!m?.height||m.width/m.height<1.6)return;
+ area.hidden=true;
+ if(confirm('Wide image detected ('+m.width+' × '+m.height+'). Split into a seamless carousel?'))openCarouselSplitEditor();
+}
+function carouselSourceBytes(){
+ if(selectedMediaSnapshot?.bytes)return new Blob([selectedMediaSnapshot.bytes],{type:selectedMediaSnapshot.type||'image/png'});
+ return document.getElementById('pMedia')?.files?.[0]||null;
+}
+async function decodeCarouselSource(){
+ const blob=carouselSourceBytes();if(!blob)throw Error('Image snapshot unavailable. Select the image again.');
+ // Use the bytes already captured during the first gallery read; Android content URIs may expire.
+ const data=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=()=>reject(Error('Cannot decode cached image'));r.readAsDataURL(blob)});
+ return await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(Error('Image decoding failed'));img.src=data});
+}
+async function openCarouselSplitEditor(){
+ const area=document.getElementById('carouselSplitOffer');if(!area)return;
  area.hidden=false;
- const count=Math.ceil((m.width/m.height)/0.8);
- area.innerHTML='<b>Wide image detected · '+m.width+' × '+m.height+'</b><p class="sub">Create a seamless carousel? Your original remains unchanged. Splitting is optional.</p>'+
- '<div class="field"><label>Slide ratio</label><select id="splitRatio"><option value="4:5">4:5 Portrait</option><option value="1:1">1:1 Square</option></select></div>'+
- '<div class="field"><label>Edges</label><select id="splitBackground"><option value="extend">Extend matching background (no content crop)</option><option value="crop">Fill by cropping edges</option></select></div>'+
- '<small>Estimated '+Math.min(10,count)+' slides at 4:5. Preview before scheduling.</small>'+
- '<div class="actions"><button type="button" class="btn" onclick="splitSelectedCarousel()">Split into Carousel</button><button type="button" class="btn secondary" onclick="document.getElementById(\'carouselSplitOffer\').hidden=true">Keep Original</button></div>';
+ area.innerHTML='<h3>Carousel Split Editor</h3><p class="sub">Adjust the ratio and inspect the continuous slide boundaries. Original image is untouched.</p>'+
+ '<div class="field"><label>Slide ratio</label><select id="splitRatio" onchange="drawCarouselSplitPreview()"><option value="4:5">4:5 Portrait</option><option value="1:1">1:1 Square</option></select></div>'+
+ '<div class="field"><label>Background</label><select id="splitBackground" onchange="drawCarouselSplitPreview()"><option value="extend">Extend matching background</option><option value="crop">Crop edges</option></select></div>'+
+ '<div id="splitPreviewStatus" class="note">Preparing preview…</div>'+
+ '<div style="overflow:auto;border-radius:12px;background:#20283c;margin:12px 0"><canvas id="splitPreviewCanvas" style="display:block;width:100%;height:auto"></canvas></div>'+
+ '<div class="actions"><button type="button" class="btn" id="splitConfirm" onclick="splitSelectedCarousel()" disabled>Split</button><button type="button" class="btn secondary" onclick="document.getElementById(\'carouselSplitOffer\').hidden=true">Cancel</button></div>';
+ await drawCarouselSplitPreview();
+ area.scrollIntoView({block:'nearest',behavior:'smooth'});
+}
+async function drawCarouselSplitPreview(){
+ const status=document.getElementById('splitPreviewStatus'),button=document.getElementById('splitConfirm');
+ if(button)button.disabled=true;
+ try{
+  const img=carouselSplitSource||await decodeCarouselSource();carouselSplitSource=img;
+  const ratio=document.getElementById('splitRatio')?.value||'4:5',extend=document.getElementById('splitBackground')?.value!=='crop';
+  const sw=ratio==='1:1'?1080:1080,sh=ratio==='1:1'?1080:1350;
+  const count=Math.ceil((img.naturalWidth/img.naturalHeight)*sh/sw);
+  if(count<2||count>10)throw Error('Requires '+count+' slides; supported range 2–10.');
+  carouselSplitSlides=count;carouselSplitRatio=ratio;
+  // Preview uses a reduced canvas for safe Android WebView memory use.
+  const scale=Math.min(1,1200/(count*sw)),cw=Math.round(sw*scale),ch=Math.round(sh*scale);
+  const canvas=document.getElementById('splitPreviewCanvas');canvas.width=cw*count;canvas.height=ch;
+  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas unavailable');
+  const w=canvas.width,h=canvas.height;
+  if(extend){
+   const bgScale=Math.max(w/img.width,h/img.height);
+   ctx.save();ctx.filter='blur(18px)';ctx.drawImage(img,(w-img.width*bgScale)/2,(h-img.height*bgScale)/2,img.width*bgScale,img.height*bgScale);ctx.restore();
+  }
+  const fit=(extend?Math.min:Math.max)(w/img.width,h/img.height);
+  ctx.drawImage(img,(w-img.width*fit)/2,(h-img.height*fit)/2,img.width*fit,img.height*fit);
+  carouselSplitCanvas=canvas;
+  ctx.strokeStyle='rgba(255,255,255,.95)';ctx.lineWidth=2;ctx.setLineDash([7,5]);
+  for(let i=1;i<count;i++){ctx.beginPath();ctx.moveTo(i*cw,0);ctx.lineTo(i*cw,h);ctx.stroke();}
+  ctx.setLineDash([]);
+  if(status)status.textContent=count+' seamless slides · '+ratio+' · '+(extend?'Background extended':'Crop selected')+' · Check boundaries before splitting.';
+  if(button)button.disabled=false;
+ }catch(e){if(status)status.textContent='Preview error: '+(e.message||e);toast('Cannot preview image');}
 }
 async function splitSelectedCarousel(){
- const file=document.getElementById('pMedia')?.files?.[0];
- if(!file||!file.type.startsWith('image/'))return toast('Choose a wide image first');
- const ratio=document.getElementById('splitRatio')?.value||'4:5';
- const extend=document.getElementById('splitBackground')?.value!=='crop';
- const width=1080,height=ratio==='1:1'?1080:1350;
- const button=document.querySelector('#carouselSplitOffer .btn');if(button)button.disabled=true;
+ const button=document.getElementById('splitConfirm');if(button)button.disabled=true;
  try{
-  const data=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(Error('Cannot read original image'));reader.readAsDataURL(file)});
-  const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(Error('Cannot open this image'));image.src=data});
-  const n=Math.ceil(img.naturalWidth/img.naturalHeight*height/width);
-  if(n<2||n>10)throw Error('This panorama requires '+n+' slides; supported range is 2–10');
-  const canvas=document.createElement('canvas');canvas.width=n*width;canvas.height=height;
-  const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas unavailable');
-  ctx.imageSmoothingEnabled=true;ctx.imageSmoothingQuality='high';
-  const scale=extend?Math.min(canvas.width/img.width,canvas.height/img.height):Math.max(canvas.width/img.width,canvas.height/img.height);
-  const drawW=img.width*scale,drawH=img.height*scale;
-  if(extend){
-   ctx.save();ctx.filter='blur(40px)';const bgScale=Math.max(canvas.width/img.width,canvas.height/img.height);
-   ctx.drawImage(img,(canvas.width-img.width*bgScale)/2,(height-img.height*bgScale)/2,img.width*bgScale,img.height*bgScale);
-   ctx.restore();
-  }
-  ctx.drawImage(img,(canvas.width-drawW)/2,(height-drawH)/2,drawW,drawH);
-  const files=[];
+  const img=carouselSplitSource||await decodeCarouselSource(),n=carouselSplitSlides,ratio=carouselSplitRatio;
+  if(n<2||n>10)throw Error('Preview not ready');
+  const sw=1080,sh=ratio==='1:1'?1080:1350,extend=document.getElementById('splitBackground')?.value!=='crop';
+  // Render each slide independently from the same global image transform.
+  // This avoids an oversized 10800px-wide canvas on low-memory phones.
+  const totalW=n*sw,fit=(extend?Math.min:Math.max)(totalW/img.width,sh/img.height);
+  const drawW=img.width*fit,drawH=img.height*fit,x=(totalW-drawW)/2,y=(sh-drawH)/2;
+  const files=[],base=selectedMediaSnapshot?.name||'carousel';
   for(let i=0;i<n;i++){
-   const tile=document.createElement('canvas');tile.width=width;tile.height=height;
-   tile.getContext('2d').drawImage(canvas,i*width,0,width,height,0,0,width,height);
-   const blob=await new Promise((resolve,reject)=>tile.toBlob(b=>b?resolve(b):reject(Error('Slide export failed')),'image/jpeg',0.93));
-   files.push(new File([blob],file.name.replace(/\.[^.]+$/,'')+'_slide_'+String(i+1).padStart(2,'0')+'.jpg',{type:'image/jpeg'}));
+   const canvas=document.createElement('canvas');canvas.width=sw;canvas.height=sh;
+   const ctx=canvas.getContext('2d');if(!ctx)throw Error('Canvas unavailable');
+   if(extend){
+    const bgScale=Math.max(totalW/img.width,sh/img.height);
+    ctx.save();ctx.filter='blur(36px)';ctx.drawImage(img,(totalW-img.width*bgScale)/2-i*sw,(sh-img.height*bgScale)/2,img.width*bgScale,img.height*bgScale);ctx.restore();
+   }
+   ctx.drawImage(img,x-i*sw,y,drawW,drawH);
+   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(Error('Export failed')),'image/jpeg',.93));
+   files.push(new File([blob],base.replace(/\.[^.]+$/,'')+'_slide_'+String(i+1).padStart(2,'0')+'.jpg',{type:'image/jpeg'}));
   }
-  pendingCarouselFiles=files;
+  pendingCarouselFiles=files;carouselSplitSource=null;
   const kind=document.getElementById('pKind');if(kind)kind.value='carousel';
-  const source=document.getElementById('pMedia');if(source)source.value='';
+  const input=document.getElementById('pMedia');if(input)input.value='';
   clearSelectedMediaSnapshot();
-  const choice=document.getElementById('carouselSplitOffer');if(choice)choice.hidden=true;
+  document.getElementById('carouselSplitOffer').hidden=true;
   const selected=document.getElementById('pRatio');if(selected)selected.value=ratio;
-  renderCarouselSelected();toast(n+' carousel slides ready. Review their order, then schedule.');
+  renderCarouselSelected();
+  setComposerStage(1);
+  document.getElementById('pCaption')?.scrollIntoView({block:'center',behavior:'smooth'});
+  toast(n+' slides created. Add caption and continue to scheduling.');
  }catch(e){toast('Split failed: '+String(e.message||e).slice(0,100))}
  finally{if(button)button.disabled=false}
 }
@@ -1078,7 +1119,7 @@ function previewSelectedPostMedia(){
  const file=document.getElementById('pMedia')?.files?.[0],preview=document.getElementById('postLargePreview');
  editedPosterFile=null;clearSelectedMediaSnapshot();
  if(!file)return;
- pendingCarouselFiles=[];
+ pendingCarouselFiles=[];carouselSplitSource=null;
  const kind=document.getElementById('pKind');if(kind)kind.value=file.type.startsWith('video/')?'reel':newPostContentChoice==='carousel'?'carousel':'image';
  const version=selectedMediaVersion;
  const label=document.getElementById('mediaQualityInfo');
